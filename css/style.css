@@ -139,55 +139,84 @@ main.container {
   gap: 14px;
 }
 
-.home-landing {
-  display: grid;
-  grid-template-columns: minmax(320px, 470px) 1fr;
-  gap: 18px;
-  align-items: stretch;
+.home-stage {
   min-height: calc(100vh - 170px);
 }
 
-.home-login-card {
-  padding: 32px 24px 24px;
-  border-radius: 18px;
-  border: 1px solid rgba(133, 239, 172, 0.35);
+.home-scene {
+  border: 4px solid rgba(149, 213, 178, 0.95);
+  border-radius: 22px;
+  overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(17, 43, 40, 0.72), rgba(12, 21, 34, 0.82)),
-    radial-gradient(circle at 20% 10%, rgba(134, 239, 172, 0.12), transparent 38%);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+    linear-gradient(160deg, rgba(4, 18, 27, 0.3), rgba(4, 18, 27, 0.65)),
+    url("../maxresdefault.jpg") center / cover no-repeat;
+  box-shadow: 0 28px 58px rgba(0, 0, 0, 0.42);
 }
 
-.home-login-card h1 {
+.home-overlay {
+  min-height: calc(100vh - 220px);
+  padding: 36px 30px;
+  width: min(450px, 100%);
+  background: linear-gradient(120deg, rgba(9, 29, 36, 0.9), rgba(9, 29, 36, 0.62));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-overlay h1 {
   margin: 0;
   font-size: clamp(1.7rem, 2.8vw, 2.45rem);
 }
 
-.home-login-card p {
+.home-overlay p {
   margin: 0;
   color: #d6e5e6;
   line-height: 1.65;
 }
 
-.home-login-card #auth-root {
-  margin-top: 8px;
+.login-box {
+  margin-top: 6px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(173, 230, 197, 0.45);
+  background: rgba(5, 17, 31, 0.58);
+  display: grid;
+  gap: 8px;
 }
 
-.home-login-card .auth-panel {
+.login-box label {
+  color: #d9f6e6;
+  font-size: 0.87rem;
+}
+
+.login-box input {
+  border: 1px solid rgba(157, 203, 184, 0.5);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 19, 30, 0.92);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.login-box input:focus {
+  outline: none;
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgba(134, 239, 172, 0.2);
+}
+
+.login-box small {
+  color: #b8d5d7;
+  font-size: 0.8rem;
+}
+
+.home-overlay #auth-root {
+  margin-top: 6px;
+}
+
+.home-overlay .auth-panel {
   background: rgba(5, 17, 31, 0.44);
   border-color: rgba(160, 211, 187, 0.38);
   box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
-}
-
-.home-visual {
-  border-radius: 18px;
-  border: 1px solid rgba(133, 239, 172, 0.32);
-  background:
-    linear-gradient(155deg, rgba(10, 20, 30, 0.15), rgba(10, 20, 30, 0.68)),
-    url("../maxresdefault.jpg") center / cover no-repeat;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
 }
 
 .hero h1 {
@@ -598,16 +627,13 @@ main.container {
     min-width: 100%;
   }
 
-  .home-landing {
-    grid-template-columns: 1fr;
+  .home-stage {
     min-height: auto;
   }
 
-  .home-login-card {
-    padding: 26px 18px 20px;
-  }
-
-  .home-visual {
-    min-height: 280px;
+  .home-overlay {
+    width: 100%;
+    min-height: 420px;
+    padding: 24px 18px;
   }
 }
