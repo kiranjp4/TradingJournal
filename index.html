@@ -10,20 +10,19 @@
     <main class="nature-only" aria-label="Nature background">
       <section class="home-right-login" aria-label="Login panel">
         <h1>Welcome to Trading Journal - KJP</h1>
-        <p>Sign in to continue your trading journal.</p>
-        <form class="soft-login-form">
-          <label for="email">Email</label>
-          <input id="email" type="email" placeholder="Enter your email" autocomplete="email" />
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            placeholder="Enter your password"
-            autocomplete="current-password"
-          />
-          <button class="button button-primary" type="button">Login</button>
-        </form>
+        <p>Sign in with Google to save all sheet changes to your cloud data.</p>
+        <div id="auth-root"></div>
       </section>
     </main>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="js/config.js"></script>
+    <script src="js/googledrive.js"></script>
+    <script>
+      (async () => {
+        if (!window.GoogleDriveSync) return;
+        await GoogleDriveSync.initialize();
+        GoogleDriveSync.renderAuthUI(document.getElementById("auth-root"));
+      })();
+    </script>
   </body>
 </html>
