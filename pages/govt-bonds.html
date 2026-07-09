@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Govt. Bonds | Trading Journal</title>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <div class="brand">
+          <strong>Trading Journal - KJP</strong>
+          <span>Govt. Bonds</span>
+        </div>
+        <nav class="nav-links">
+          <a href="../index.html">Home</a>
+          <a href="trade-journal.html" data-nav-slug="trade-journal">Trade Journal</a>
+          <a href="govt-bonds.html" data-nav-slug="govt-bonds" class="active">Govt. Bonds</a>
+          <a href="itc.html" data-nav-slug="itc">ITC</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+    <div id="auth-root"></div>
+    <div id="sheet-root"></div>
+  </main>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/googledrive.js"></script>
+    <script src="../js/app.js"></script>
+    <script>TradingJournal.initSheetPage("govt-bonds");</script>
+  </body>
+</html>
+
+
+

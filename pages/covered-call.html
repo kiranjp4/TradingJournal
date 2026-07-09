@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Covered Call Journal | Trading Journal</title>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <div class="brand">
+          <strong>Trading Journal - KJP</strong>
+          <span>Covered Call Journal</span>
+        </div>
+        <nav class="nav-links">
+          <a href="../index.html">Home</a>
+          <a href="trade-journal.html" data-nav-slug="trade-journal">Trade Journal</a>
+          <a href="covered-call.html" data-nav-slug="covered-call" class="active">Covered Call</a>
+          <a href="swing-trading.html" data-nav-slug="swing-trading">Swing</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+    <div id="auth-root"></div>
+    <div id="sheet-root"></div>
+  </main>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/googledrive.js"></script>
+    <script src="../js/app.js"></script>
+    <script>TradingJournal.initSheetPage("covered-call");</script>
+  </body>
+</html>
+
+
+
