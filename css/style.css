@@ -51,13 +51,15 @@ body.home-page::before {
 
 .nature-only {
   min-height: 100vh;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
+  position: relative;
   padding: 28px;
 }
 
 .home-right-login {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
   width: min(420px, calc(100% - 20px));
   padding: 26px 24px;
   border-radius: 18px;
@@ -689,11 +691,13 @@ main.container {
   }
 
   .nature-only {
-    justify-content: center;
+    position: static;
     padding: 16px;
   }
 
   .home-right-login {
+    position: static;
+    transform: none;
     width: 100%;
     padding: 20px 16px;
   }
