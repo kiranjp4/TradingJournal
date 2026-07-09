@@ -22,21 +22,25 @@
       </div>
     </header>
 
-    <main class="container home-landing">
-      <section class="home-login-card">
-        <h1>Welcome to Trading Journal - KJP</h1>
-        <p>
-          Sign in with Google. After login, you or other users can view your journal
-          pages and continue tracking from any device.
-        </p>
-        <div id="auth-root"></div>
-        <div class="hero-highlights">
-          <a class="chip-link" href="pages/trade-journal.html">Trade Journal</a>
-          <a class="chip-link" href="pages/net-pnl-jp.html">Net P&amp;L Jp</a>
-          <a class="chip-link" href="pages/quarterly-result.html">Quarterly Result</a>
+    <main class="container home-stage">
+      <section class="home-scene" aria-label="Nature home background">
+        <div class="home-overlay">
+          <div class="home-message-box">
+            <h1>Welcome to Trading Journal - KJP</h1>
+          </div>
+          <div class="home-login-panel">
+            <form class="login-box">
+              <label for="login-email">Email</label>
+              <input id="login-email" type="email" placeholder="Enter your email" autocomplete="email" />
+              <label for="login-password">Password</label>
+              <input id="login-password" type="password" placeholder="Enter your password" autocomplete="current-password" />
+              <button class="button button-primary" type="button">Login</button>
+              <small>Use Google Sign in for cloud sync</small>
+            </form>
+            <div id="auth-root"></div>
+          </div>
         </div>
       </section>
-      <section class="home-visual" aria-label="Nature background image"></section>
     </main>
 
     <footer class="footer container">
