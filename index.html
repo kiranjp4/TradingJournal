@@ -22,55 +22,21 @@
       </div>
     </header>
 
-    <main class="container">
-      <div id="auth-root"></div>
-
-      <section class="hero">
+    <main class="container home-landing">
+      <section class="home-login-card">
         <h1>Welcome to Trading Journal - KJP</h1>
         <p>
-          Sign in with Google, and once you or any other user logs in, they can
-          view your journal pages from anywhere.
+          Sign in with Google. After login, you or other users can view your journal
+          pages and continue tracking from any device.
         </p>
+        <div id="auth-root"></div>
         <div class="hero-highlights">
-          <a class="chip-link" href="pages/trade-journal.html">Jump to Trade Journal</a>
-          <a class="chip-link" href="pages/net-pnl-jp.html">Open Net P&amp;L</a>
-          <a class="chip-link" href="pages/quarterly-result.html">Review Quarterly</a>
+          <a class="chip-link" href="pages/trade-journal.html">Trade Journal</a>
+          <a class="chip-link" href="pages/net-pnl-jp.html">Net P&amp;L Jp</a>
+          <a class="chip-link" href="pages/quarterly-result.html">Quarterly Result</a>
         </div>
       </section>
-
-      <section id="stats-root" class="stats-grid"></section>
-      <section id="cards-root" class="cards-grid"></section>
-
-      <section class="panel">
-        <h2>How to update data anywhere</h2>
-        <ol>
-          <li>Complete the <strong>Google Drive setup</strong> below (one-time, free).</li>
-          <li>Click <strong>Sign in with Google</strong>.</li>
-          <li>Open any sheet, click <strong>Edit Mode</strong>, make changes, then <strong>Save</strong>.</li>
-          <li>Open the site on phone/laptop, sign in again, and your data will be there.</li>
-        </ol>
-        <p>Last updated: <span id="last-updated">Not yet loaded</span></p>
-      </section>
-
-      <section class="panel setup-steps" id="setup">
-        <h2>One-time Google Drive setup (free)</h2>
-        <ol>
-          <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>.</li>
-          <li>Create a project named <code>Trading Journal KJP</code>.</li>
-          <li>Enable <strong>Google Drive API</strong>.</li>
-          <li>Go to <strong>Credentials</strong> → <strong>Create Credentials</strong> → <strong>OAuth client ID</strong>.</li>
-          <li>Application type: <strong>Web application</strong>.</li>
-          <li>Add Authorized JavaScript origin:
-            <br /><code>https://kiranjp4.github.io</code>
-          </li>
-          <li>Copy the <strong>Client ID</strong>.</li>
-          <li>Paste it in <code>D:\Website\js\config.js</code> and upload to GitHub.</li>
-        </ol>
-        <p>
-          Your data will be stored in Google Drive folder:
-          <code>TradingJournal-KJP/data/</code>
-        </p>
-      </section>
+      <section class="home-visual" aria-label="Nature background image"></section>
     </main>
 
     <footer class="footer container">
