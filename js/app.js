@@ -13,6 +13,19 @@ const ICONS = {
   bar: "IT",
 };
 
+const SHEET_HINTS = {
+  "trade-journal": "Track each executed trade, setup, risk, and notes.",
+  "net-pnl-jp": "Monitor overall performance with running net P&L.",
+  "quarterly-result": "Review quarter-level outcomes and capital efficiency.",
+  "net-pnl-dhanu": "Compare P&L flow for the Dhanu account.",
+  itc: "Capture ITC position decisions and follow-up actions.",
+  weight: "Manage sizing and allocation weight across setups.",
+  "covered-call": "Track covered-call entries, exits, and premium outcomes.",
+  "swing-trading": "Log swing setups with entry/exit conviction.",
+  "govt-bonds": "Record bond yields, holdings, and interest movement.",
+  formula: "Store calculation helpers and reusable formulas.",
+};
+
 const pageState = {
   slug: null,
   sheetData: null,
@@ -144,6 +157,18 @@ function getStorageLabel() {
   if (pageState.storageMode === "googledrive") return "Saved in Google Drive";
   if (pageState.storageMode === "browser") return "Saved in browser only";
   return "Loaded from Excel import";
+}
+
+function getSheetHint(slug) {
+  return SHEET_HINTS[slug] || "Analyze your sheet with quick filtering and edit controls.";
+}
+
+function ensureFooter() {
+  if (document.querySelector(".footer")) return;
+  const footer = document.createElement("footer");
+  footer.className = "footer container";
+  footer.innerHTML = "<p>Trading Journal - KJP | Google Drive Cloud + GitHub Pages</p>";
+  document.body.appendChild(footer);
 }
 
 function setActiveNav(slug) {
@@ -342,8 +367,9 @@ function renderSheetPage(container) {
 
   container.innerHTML = `
     <div class="page-toolbar">
-      <div>
+      <div class="page-title-wrap">
         <h1>${sheetData.title}</h1>
+        <p class="page-subtitle">${getSheetHint(pageState.slug)}</p>
         <div class="meta-bar">
           <span>${sheetData.rowCount} rows</span>
           <span>${sheetData.colCount} columns</span>
@@ -461,11 +487,11 @@ async function initHomePage() {
       </div>
       <div class="stat-card">
         <div class="label">Storage</div>
-        <div class="value" style="font-size:1rem;">${storageLabel}</div>
+        <div class="value value-small">${storageLabel}</div>
       </div>
       <div class="stat-card">
         <div class="label">Last Updated</div>
-        <div class="value" style="font-size:1rem;">${manifest.updatedAt}</div>
+        <div class="value value-small">${manifest.updatedAt}</div>
       </div>
     `;
 
@@ -474,7 +500,10 @@ async function initHomePage() {
         const icon = ICONS[sheet.icon] || "TJ";
         return `
           <a class="sheet-card" href="pages/${sheet.slug}.html">
-            <div class="icon">${icon}</div>
+            <div class="sheet-card-head">
+              <div class="icon">${icon}</div>
+              <span class="sheet-open-pill">Open</span>
+            </div>
             <h3>${sheet.title}</h3>
             <p>Excel sheet: <strong>${sheet.sheetName}</strong></p>
             <div class="meta">
@@ -497,6 +526,7 @@ async function initHomePage() {
 
 async function bootstrapApp(startFn) {
   const authRoot = document.getElementById("auth-root");
+  ensureFooter();
   if (window.GoogleDriveSync) {
     await GoogleDriveSync.initialize();
     GoogleDriveSync.renderAuthUI(authRoot);
