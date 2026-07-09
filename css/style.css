@@ -148,38 +148,41 @@ main.container {
   border-radius: 22px;
   overflow: hidden;
   background:
-    linear-gradient(160deg, rgba(4, 18, 27, 0.3), rgba(4, 18, 27, 0.65)),
+    linear-gradient(160deg, rgba(4, 18, 27, 0.24), rgba(4, 18, 27, 0.62)),
     url("../maxresdefault.jpg") center / cover no-repeat;
   box-shadow: 0 28px 58px rgba(0, 0, 0, 0.42);
 }
 
 .home-overlay {
   min-height: calc(100vh - 220px);
-  padding: 36px 30px;
-  width: min(450px, 100%);
-  background: linear-gradient(120deg, rgba(9, 29, 36, 0.9), rgba(9, 29, 36, 0.62));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  padding: 34px 40px;
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 340px);
+  gap: 26px;
+  align-items: center;
 }
 
-.home-overlay h1 {
-  margin: 0;
-  font-size: clamp(1.7rem, 2.8vw, 2.45rem);
+.home-message-box {
+  padding: 20px 26px;
+  border-radius: 14px;
+  border: 1px solid rgba(173, 230, 197, 0.5);
+  background: rgba(9, 29, 36, 0.58);
+  max-width: 560px;
 }
 
-.home-overlay p {
+.home-message-box h1 {
   margin: 0;
-  color: #d6e5e6;
-  line-height: 1.65;
+  font-size: clamp(1.8rem, 3.2vw, 2.75rem);
+  color: #f5fffa;
+  line-height: 1.2;
 }
 
 .login-box {
-  margin-top: 6px;
-  padding: 16px;
+  margin-top: 0;
+  padding: 16px 16px 14px;
   border-radius: 14px;
   border: 1px solid rgba(173, 230, 197, 0.45);
-  background: rgba(5, 17, 31, 0.58);
+  background: rgba(5, 17, 31, 0.66);
   display: grid;
   gap: 8px;
 }
@@ -209,11 +212,18 @@ main.container {
   font-size: 0.8rem;
 }
 
-.home-overlay #auth-root {
+.home-login-panel {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(173, 230, 197, 0.5);
+  background: rgba(8, 20, 30, 0.7);
+}
+
+.home-login-panel #auth-root {
   margin-top: 6px;
 }
 
-.home-overlay .auth-panel {
+.home-login-panel .auth-panel {
   background: rgba(5, 17, 31, 0.44);
   border-color: rgba(160, 211, 187, 0.38);
   box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
@@ -632,8 +642,12 @@ main.container {
   }
 
   .home-overlay {
-    width: 100%;
-    min-height: 420px;
+    grid-template-columns: 1fr;
+    min-height: 460px;
     padding: 24px 18px;
+  }
+
+  .home-message-box {
+    max-width: 100%;
   }
 }
