@@ -33,11 +33,7 @@ body {
 }
 
 body.home-page {
-  background:
-    linear-gradient(140deg, rgba(7, 58, 42, 0.7), rgba(6, 24, 52, 0.78)),
-    radial-gradient(circle at 10% 20%, rgba(96, 165, 109, 0.28), transparent 40%),
-    radial-gradient(circle at 85% 10%, rgba(52, 211, 153, 0.2), transparent 34%),
-    linear-gradient(180deg, #0b1f2f 0%, #0b1220 100%);
+  background: url("../Nature1.jpg") center / cover no-repeat fixed;
 }
 
 body::before {
@@ -50,9 +46,11 @@ body::before {
 }
 
 body.home-page::before {
-  background:
-    radial-gradient(circle at 20% 0%, rgba(74, 222, 128, 0.2), transparent 32%),
-    radial-gradient(circle at 80% 0%, rgba(34, 197, 94, 0.18), transparent 28%);
+  display: none;
+}
+
+.nature-only {
+  min-height: 100vh;
 }
 
 a {
