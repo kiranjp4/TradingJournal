@@ -61,7 +61,7 @@ body.home-page::before {
   top: 50%;
   transform: translateY(-50%);
   width: min(420px, calc(100% - 20px));
-  padding: 26px 24px;
+  padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(220, 255, 237, 0.5);
   background: rgba(9, 20, 28, 0.42);
@@ -69,20 +69,11 @@ body.home-page::before {
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.32);
 }
 
-.home-right-login h1 {
-  margin: 0;
-  font-size: clamp(1.45rem, 2.1vw, 2rem);
-}
-
-.home-right-login p {
-  margin: 8px 0 14px;
-  color: #d4e2e7;
-}
-
 .home-right-login .auth-panel {
   margin: 0;
   background: rgba(7, 18, 27, 0.5);
   border-color: rgba(220, 255, 237, 0.38);
+  justify-content: center;
 }
 
 a {
