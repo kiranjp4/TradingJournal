@@ -505,11 +505,7 @@ async function initHomePage() {
               <span class="sheet-open-pill">Open</span>
             </div>
             <h3>${sheet.title}</h3>
-            <p>Excel sheet: <strong>${sheet.sheetName}</strong></p>
-            <div class="meta">
-              <span>${sheet.rowCount} rows</span>
-              <span>${storageLabel}</span>
-            </div>
+            <p>Open this journal page to view and edit its full data.</p>
           </a>
         `;
       })
