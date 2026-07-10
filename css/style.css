@@ -51,16 +51,16 @@ body.home-page::before {
 
 .nature-only {
   min-height: 100vh;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
   padding: 28px;
 }
 
-.home-right-login {
-  position: absolute;
-  right: 28px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(420px, calc(100% - 20px));
+.home-center-login {
+  width: min(520px, calc(100% - 20px));
   padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(220, 255, 237, 0.5);
@@ -69,11 +69,25 @@ body.home-page::before {
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.32);
 }
 
-.home-right-login .auth-panel {
+.home-center-login .auth-panel {
   margin: 0;
   background: rgba(7, 18, 27, 0.5);
   border-color: rgba(220, 255, 237, 0.38);
   justify-content: center;
+}
+
+.home-pages {
+  width: min(1200px, 100%);
+}
+
+.home-updated {
+  margin: 0;
+  color: #f1f5f9;
+  text-align: center;
+}
+
+.hidden {
+  display: none !important;
 }
 
 a {
@@ -659,13 +673,11 @@ main.container {
   }
 
   .nature-only {
-    position: static;
+    justify-content: center;
     padding: 16px;
   }
 
-  .home-right-login {
-    position: static;
-    transform: none;
+  .home-center-login {
     width: 100%;
     padding: 20px 16px;
   }

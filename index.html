@@ -8,19 +8,21 @@
   </head>
   <body class="home-page">
     <main class="nature-only" aria-label="Nature background">
-      <section class="home-right-login" aria-label="Login panel">
+      <section class="home-center-login" aria-label="Login panel">
         <div id="auth-root"></div>
+      </section>
+      <section id="pages-panel" class="home-pages hidden" aria-label="Your pages">
+        <section id="stats-root" class="stats-grid"></section>
+        <section id="cards-root" class="cards-grid"></section>
+        <p class="home-updated">Last updated: <span id="last-updated">Not loaded</span></p>
       </section>
     </main>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/config.js"></script>
     <script src="js/googledrive.js"></script>
+    <script src="js/app.js"></script>
     <script>
-      (async () => {
-        if (!window.GoogleDriveSync) return;
-        await GoogleDriveSync.initialize();
-        GoogleDriveSync.renderAuthUI(document.getElementById("auth-root"));
-      })();
+      TradingJournal.initHomePage();
     </script>
   </body>
 </html>

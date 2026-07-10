@@ -461,24 +461,30 @@ async function initSheetPage(slug) {
 async function initHomePage() {
   const cardsRoot = document.getElementById("cards-root");
   const statsRoot = document.getElementById("stats-root");
+  const pagesPanel = document.getElementById("pages-panel");
   if (!cardsRoot || !statsRoot) return;
 
+  if (!window.GoogleDriveSync?.isSignedIn()) {
+    statsRoot.innerHTML = "";
+    cardsRoot.innerHTML = "";
+    pagesPanel?.classList.add("hidden");
+    return;
+  }
+
+  pagesPanel?.classList.remove("hidden");
+
   try {
-    let manifest;
-    let storageLabel = "Excel import";
-
-    if (window.GoogleDriveSync?.isSignedIn()) {
-      manifest = await GoogleDriveSync.loadManifest();
-      if (!manifest) {
-        const seeded = await GoogleDriveSync.seedFromBundledData((path) => fetchJson(path));
-        manifest = seeded.manifest;
-      }
-      storageLabel = "Google Drive";
-    } else {
-      manifest = await fetchJson("data/manifest.json");
+    let manifest = await GoogleDriveSync.loadManifest();
+    if (!manifest) {
+      const seeded = await GoogleDriveSync.seedFromBundledData((path) => fetchJson(path));
+      manifest = seeded.manifest;
     }
+    const storageLabel = "Google Drive";
 
-    document.getElementById("last-updated").textContent = manifest.updatedAt;
+    const lastUpdated = document.getElementById("last-updated");
+    if (lastUpdated) {
+      lastUpdated.textContent = manifest.updatedAt;
+    }
 
     statsRoot.innerHTML = `
       <div class="stat-card">
@@ -511,6 +517,7 @@ async function initHomePage() {
       })
       .join("");
   } catch (error) {
+    pagesPanel?.classList.remove("hidden");
     cardsRoot.innerHTML = `
       <div class="error-state panel">
         <h2>Website data not found</h2>
