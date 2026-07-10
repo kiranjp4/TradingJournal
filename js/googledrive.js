@@ -230,6 +230,7 @@ const GoogleDriveSync = (() => {
           .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
           .filter((value) => value !== "");
       } catch (error) {
+        console.warn(`[TradingJournal] Could not resolve dropdown range "${fullRangeRef}":`, error);
         return [];
       }
     })();
@@ -246,7 +247,11 @@ const GoogleDriveSync = (() => {
         fields: "sheets.data.rowData.values(userEnteredFormat.textFormat.bold,dataValidation)",
       });
       const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?${params.toString()}`);
-      if (!response.ok) return { bold: {}, dropdowns: {} };
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, errorText);
+        return { bold: {}, dropdowns: {} };
+      }
 
       const data = await response.json();
       const rowData = data.sheets?.[0]?.data?.[0]?.rowData || [];
@@ -288,8 +293,15 @@ const GoogleDriveSync = (() => {
         });
       }
 
+      console.info(
+        `[TradingJournal] "${tabName}": detected ${Object.keys(bold).length} bold cell(s), ${
+          Object.keys(dropdowns).length
+        } dropdown cell(s).`
+      );
+
       return { bold, dropdowns };
     } catch (error) {
+      console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, error);
       return { bold: {}, dropdowns: {} };
     }
   }
