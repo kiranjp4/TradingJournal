@@ -1,25 +1,58 @@
+// Despite the file name (kept for compatibility with existing page scripts),
+// this module now syncs directly with a live Google Sheet via the Sheets API,
+// instead of storing JSON snapshots in Google Drive.
 const GoogleDriveSync = (() => {
-  const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
-  const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
-  const SCOPE = "https://www.googleapis.com/auth/drive.file";
+  const SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
+  const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+
+  // Maps each website page (slug) to its tab name inside your Google Sheet.
+  // If your tab names differ, override them via TRADING_JOURNAL_CONFIG.sheetTabOverrides.
+  const SHEET_META = {
+    "net-pnl-jp": { title: "Net P&L - Jp", icon: "chart", tabName: "Net_P&L_Jp" },
+    "net-pnl-dhanu": { title: "Net P&L - Dhanu", icon: "chart", tabName: "Net_P&L_Dhanu" },
+    "quarterly-result": { title: "Quarterly Result", icon: "calendar", tabName: "Quarterly_Result" },
+    "trade-journal": { title: "Trade Journal", icon: "book", tabName: "Trade_Journal" },
+    formula: { title: "Formula", icon: "formula", tabName: "Formula" },
+    "covered-call": { title: "Covered Call Journal", icon: "layers", tabName: "Covered_Call_Trade_Journal" },
+    "swing-trading": { title: "Swing Trading", icon: "trending", tabName: "Swing_Trading" },
+    "govt-bonds": { title: "Govt. Bonds", icon: "shield", tabName: "Govt. Bonds" },
+    weight: { title: "Weight Tracker", icon: "activity", tabName: "Weight" },
+    itc: { title: "ITC Analysis", icon: "bar", tabName: "ITC" },
+  };
 
   let accessToken = null;
   let tokenClient = null;
-  let rootFolderId = null;
-  let dataFolderId = null;
   let signInPromise = null;
+  const sheetIdCache = new Map();
 
   function getConfig() {
     return window.TRADING_JOURNAL_CONFIG || {};
   }
 
-  function getFolderName() {
-    return getConfig().driveFolder || "TradingJournal-KJP";
+  function getSpreadsheetId() {
+    return getConfig().googleSheetId || "";
+  }
+
+  function getTabName(slug) {
+    return getConfig().sheetTabOverrides?.[slug] || SHEET_META[slug]?.tabName || slug;
   }
 
   function isConfigured() {
     const clientId = getConfig().googleClientId || "";
-    return clientId && !clientId.includes("PASTE_YOUR_GOOGLE_CLIENT_ID");
+    const hasClientId = clientId && !clientId.includes("PASTE_YOUR_GOOGLE_CLIENT_ID");
+    const sheetId = getSpreadsheetId();
+    const hasSheetId = sheetId && !sheetId.includes("PASTE_YOUR_GOOGLE_SHEET_ID");
+    return Boolean(hasClientId && hasSheetId);
+  }
+
+  function columnLetter(index) {
+    let name = "";
+    let num = index;
+    do {
+      name = String.fromCharCode((num % 26) + 65) + name;
+      num = Math.floor(num / 26) - 1;
+    } while (num >= 0);
+    return name;
   }
 
   function waitForGoogleIdentity() {
@@ -97,8 +130,7 @@ const GoogleDriveSync = (() => {
 
     signInPromise = (async () => {
       await requestAccessToken(true);
-      rootFolderId = null;
-      dataFolderId = null;
+      sheetIdCache.clear();
       return true;
     })();
 
@@ -114,12 +146,11 @@ const GoogleDriveSync = (() => {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
     accessToken = null;
-    rootFolderId = null;
-    dataFolderId = null;
+    sheetIdCache.clear();
     sessionStorage.removeItem("tradingjournal-google-token");
   }
 
-  async function driveFetch(url, options = {}) {
+  async function authFetch(url, options = {}) {
     if (!accessToken) {
       await requestAccessToken(false);
     }
@@ -146,190 +177,136 @@ const GoogleDriveSync = (() => {
     return response;
   }
 
-  async function findFolderByName(name, parentId = null) {
-    const parentQuery = parentId ? `'${parentId}' in parents and ` : "'root' in parents and ";
-    const query = `${parentQuery}name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-    const response = await driveFetch(
-      `${DRIVE_FILES_URL}?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`
-    );
+  async function getTabSheetId(tabName) {
+    if (sheetIdCache.has(tabName)) return sheetIdCache.get(tabName);
 
+    const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?fields=sheets.properties`);
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Could not search Google Drive: ${errorText}`);
+      throw new Error(`Could not read your Google Sheet structure: ${errorText}`);
     }
 
     const data = await response.json();
-    return data.files?.[0] || null;
-  }
+    (data.sheets || []).forEach((sheet) => {
+      sheetIdCache.set(sheet.properties.title, sheet.properties.sheetId);
+    });
 
-  async function createFolder(name, parentId = null) {
-    const metadata = {
-      name,
-      mimeType: "application/vnd.google-apps.folder",
-    };
-
-    if (parentId) {
-      metadata.parents = [parentId];
+    if (!sheetIdCache.has(tabName)) {
+      throw new Error(`Could not find a tab named "${tabName}" in your Google Sheet.`);
     }
 
-    const response = await driveFetch(DRIVE_FILES_URL, {
+    return sheetIdCache.get(tabName);
+  }
+
+  async function readSheetValues(tabName) {
+    const range = encodeURIComponent(`'${tabName}'`);
+    const url = `${SHEETS_API_BASE}/${getSpreadsheetId()}/values/${range}?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`;
+    const response = await authFetch(url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Could not read "${tabName}" from your Google Sheet: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.values || [];
+  }
+
+  async function loadSheet(slug) {
+    const tabName = getTabName(slug);
+    const values = await readSheetValues(tabName);
+    const meta = SHEET_META[slug] || {};
+    const rowCount = values.length;
+    const colCount = values.reduce((max, row) => Math.max(max, row.length), 0);
+
+    return {
+      sheetName: tabName,
+      slug,
+      title: meta.title || slug,
+      icon: meta.icon || "book",
+      updatedAt: new Date().toLocaleString("en-IN"),
+      rowCount,
+      colCount,
+      cells: values,
+    };
+  }
+
+  async function saveDirtyCells(slug, dirtyCells) {
+    if (!dirtyCells || dirtyCells.size === 0) return true;
+
+    const tabName = getTabName(slug);
+    const data = [];
+    dirtyCells.forEach((value, key) => {
+      const [rowIndex, colIndex] = key.split(":").map(Number);
+      const range = `'${tabName}'!${columnLetter(colIndex)}${rowIndex + 1}`;
+      data.push({ range, values: [[value]] });
+    });
+
+    const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}/values:batchUpdate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(metadata),
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Could not create folder ${name}: ${errorText}`);
-    }
-
-    return response.json();
-  }
-
-  async function ensureDataFolder() {
-    if (dataFolderId) return dataFolderId;
-
-    const rootFolder = await findFolderByName(getFolderName());
-    rootFolderId = rootFolder?.id || (await createFolder(getFolderName())).id;
-
-    const dataFolder = await findFolderByName("data", rootFolderId);
-    dataFolderId = dataFolder?.id || (await createFolder("data", rootFolderId)).id;
-
-    return dataFolderId;
-  }
-
-  async function findFileByName(name, parentId) {
-    const query = `name='${name}' and '${parentId}' in parents and trashed=false`;
-    const response = await driveFetch(
-      `${DRIVE_FILES_URL}?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Could not search file ${name}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    return data.files?.[0] || null;
-  }
-
-  async function readJsonFile(fileName) {
-    const parentId = await ensureDataFolder();
-    const file = await findFileByName(fileName, parentId);
-    if (!file) return null;
-
-    const response = await driveFetch(`${DRIVE_FILES_URL}/${file.id}?alt=media`);
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Could not read ${fileName}: ${errorText}`);
-    }
-
-    return response.json();
-  }
-
-  async function writeJsonFile(fileName, data) {
-    const parentId = await ensureDataFolder();
-    const existing = await findFileByName(fileName, parentId);
-    const body = JSON.stringify(data);
-
-    if (existing) {
-      const response = await driveFetch(`${DRIVE_UPLOAD_URL}/${existing.id}?uploadType=media`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Could not update ${fileName}: ${errorText}`);
-      }
-
-      return true;
-    }
-
-    const metadata = {
-      name: fileName,
-      parents: [parentId],
-      mimeType: "application/json",
-    };
-
-    const form = new FormData();
-    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-    form.append("file", new Blob([body], { type: "application/json" }));
-
-    const response = await driveFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, {
-      method: "POST",
-      body: form,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Could not create ${fileName}: ${errorText}`);
+      throw new Error(`Could not save changes to your Google Sheet: ${errorText}`);
     }
 
     return true;
   }
 
-  async function loadManifest() {
-    return readJsonFile("manifest.json");
-  }
+  async function insertRowAt(slug, rowIndex) {
+    const tabName = getTabName(slug);
+    const sheetId = await getTabSheetId(tabName);
 
-  async function saveManifest(manifest) {
-    return writeJsonFile("manifest.json", manifest);
-  }
+    const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}:batchUpdate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            insertDimension: {
+              range: { sheetId, dimension: "ROWS", startIndex: rowIndex, endIndex: rowIndex + 1 },
+              inheritFromBefore: rowIndex > 0,
+            },
+          },
+        ],
+      }),
+    });
 
-  async function loadSheet(slug) {
-    return readJsonFile(`${slug}.json`);
-  }
-
-  async function saveSheet(slug, sheetData) {
-    const payload = {
-      ...sheetData,
-      updatedAt: new Date().toLocaleString("en-IN"),
-      savedInCloud: true,
-      cloudProvider: "Google Drive",
-    };
-    await writeJsonFile(`${slug}.json`, payload);
-    return payload;
-  }
-
-  async function seedFromBundledData(fetchJson) {
-    await ensureDataFolder();
-
-    const existingManifest = await loadManifest();
-    if (existingManifest) {
-      return { seeded: false, manifest: existingManifest };
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Could not add a row in your Google Sheet: ${errorText}`);
     }
 
-    const manifest = await fetchJson("data/manifest.json");
-    const sheets = [];
-
-    for (const sheet of manifest.sheets) {
-      const bundled = await fetchJson(`data/${sheet.slug}.json`);
-      await writeJsonFile(`${sheet.slug}.json`, {
-        ...bundled,
-        savedInCloud: true,
-        cloudProvider: "Google Drive",
-      });
-      sheets.push(sheet);
-    }
-
-    const cloudManifest = {
-      ...manifest,
-      updatedAt: new Date().toLocaleString("en-IN"),
-      storage: "Google Drive",
-      folder: getFolderName(),
-      sheets,
-    };
-
-    await saveManifest(cloudManifest);
-    return { seeded: true, manifest: cloudManifest };
+    return true;
   }
 
-  async function syncSheetFromCloud(slug, fetchBundledJson) {
-    const cloudSheet = await loadSheet(slug);
-    if (cloudSheet) return cloudSheet;
-    return fetchBundledJson(`../data/${slug}.json`);
+  async function deleteRowAt(slug, rowIndex) {
+    const tabName = getTabName(slug);
+    const sheetId = await getTabSheetId(tabName);
+
+    const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}:batchUpdate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: { sheetId, dimension: "ROWS", startIndex: rowIndex, endIndex: rowIndex + 1 },
+            },
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Could not delete that row in your Google Sheet: ${errorText}`);
+    }
+
+    return true;
   }
 
   function getHomeHref() {
@@ -342,11 +319,10 @@ const GoogleDriveSync = (() => {
 
     if (!isConfigured()) {
       container.innerHTML = compact
-        ? `<div class="auth-compact"><a class="button" href="${getHomeHref()}#setup">Setup</a></div>`
+        ? `<div class="auth-compact"><span class="auth-user">Google Sheet not configured</span></div>`
         : `
             <div class="auth-panel warning">
-              <span>Google Drive not configured yet</span>
-              <a class="button" href="${getHomeHref()}#setup">Setup guide</a>
+              <span>Add your Google Client ID and Sheet ID in js/config.js to enable sync</span>
             </div>
           `;
       return;
@@ -362,8 +338,8 @@ const GoogleDriveSync = (() => {
           `
         : `
             <div class="auth-panel connected">
-              <span class="auth-user">Signed in to Google Drive</span>
-              <span class="auth-cloud">Cloud: Google Drive</span>
+              <span class="auth-user">Signed in to Google</span>
+              <span class="auth-cloud">Synced with Google Sheet</span>
               <button class="button" type="button" data-auth-action="sync">Sync Now</button>
               <button class="button" type="button" data-auth-action="signout">Sign Out</button>
             </div>
@@ -377,7 +353,7 @@ const GoogleDriveSync = (() => {
           `
         : `
             <div class="auth-panel">
-              <span>Sign in to save edits everywhere via Google Drive</span>
+              <span>Sign in to sync edits directly with your Google Sheet</span>
               <button class="button button-primary" type="button" data-auth-action="signin">Sign in with Google</button>
             </div>
           `;
@@ -408,14 +384,12 @@ const GoogleDriveSync = (() => {
     isSignedIn,
     signIn,
     signOut,
-    loadManifest,
-    saveManifest,
     loadSheet,
-    saveSheet,
-    seedFromBundledData,
-    syncSheetFromCloud,
+    saveDirtyCells,
+    insertRowAt,
+    deleteRowAt,
     renderAuthUI,
-    getFolderName,
+    getTabName,
   };
 })();
 
