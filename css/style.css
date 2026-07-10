@@ -673,12 +673,16 @@ main,
   z-index: 2;
 }
 
-.data-table tbody tr:hover {
-  background: rgba(59, 130, 246, 0.08);
+.data-table tbody tr:hover td {
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .data-table tbody tr:nth-child(even) {
   background: rgba(12, 19, 33, 0.35);
+}
+
+.data-table td:nth-child(even) {
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .data-table td.empty {
