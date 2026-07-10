@@ -35,6 +35,40 @@ const pageState = {
   storageMode: "bundled",
 };
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function loadHomeManifestWithRetry() {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      let manifest = await GoogleDriveSync.loadManifest();
+      if (!manifest) {
+        const seeded = await GoogleDriveSync.seedFromBundledData((path) => fetchJson(path));
+        manifest = seeded?.manifest || (await GoogleDriveSync.loadManifest());
+      }
+
+      if (manifest?.sheets?.length) {
+        return manifest;
+      }
+
+      lastError = new Error("No pages were found in cloud storage.");
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < 3) {
+      await wait(attempt * 800);
+    }
+  }
+
+  throw lastError || new Error("Could not load pages from Google Drive.");
+}
+
 function formatCellValue(value) {
   if (value === null || value === undefined || value === "") {
     return { display: "", className: "empty", raw: "" };
@@ -472,16 +506,21 @@ async function initHomePage() {
   }
 
   pagesPanel?.classList.remove("hidden");
+  statsRoot.innerHTML = `
+      <div class="stat-card">
+        <div class="label">Status</div>
+        <div class="value value-small">Loading your pages...</div>
+      </div>
+    `;
+  cardsRoot.innerHTML = `<div class="loading-state panel">Loading pages from Google Drive...</div>`;
+  const lastUpdated = document.getElementById("last-updated");
+  if (lastUpdated) {
+    lastUpdated.textContent = "Loading...";
+  }
 
   try {
-    let manifest = await GoogleDriveSync.loadManifest();
-    if (!manifest) {
-      const seeded = await GoogleDriveSync.seedFromBundledData((path) => fetchJson(path));
-      manifest = seeded.manifest;
-    }
+    const manifest = await loadHomeManifestWithRetry();
     const storageLabel = "Google Drive";
-
-    const lastUpdated = document.getElementById("last-updated");
     if (lastUpdated) {
       lastUpdated.textContent = manifest.updatedAt;
     }
