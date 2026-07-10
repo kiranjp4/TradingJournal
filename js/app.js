@@ -33,41 +33,8 @@ const pageState = {
   searchTerm: "",
   dirty: false,
   storageMode: "bundled",
+  dirtyCells: new Map(),
 };
-
-function wait(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-async function loadHomeManifestWithRetry() {
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      let manifest = await GoogleDriveSync.loadManifest();
-      if (!manifest) {
-        const seeded = await GoogleDriveSync.seedFromBundledData((path) => fetchJson(path));
-        manifest = seeded?.manifest || (await GoogleDriveSync.loadManifest());
-      }
-
-      if (manifest?.sheets?.length) {
-        return manifest;
-      }
-
-      lastError = new Error("No pages were found in cloud storage.");
-    } catch (error) {
-      lastError = error;
-    }
-
-    if (attempt < 3) {
-      await wait(attempt * 800);
-    }
-  }
-
-  throw lastError || new Error("Could not load pages from Google Drive.");
-}
 
 const SHEET_COLUMN_RULES = {
   "net-pnl-jp": {
@@ -206,8 +173,13 @@ function normalizeSheetData(sheetData) {
 
 async function loadSheetData(slug) {
   if (window.GoogleDriveSync?.isSignedIn()) {
-    pageState.storageMode = "googledrive";
-    return normalizeSheetData(await GoogleDriveSync.syncSheetFromCloud(slug, fetchJson));
+    try {
+      pageState.storageMode = "googlesheets";
+      return normalizeSheetData(await GoogleDriveSync.loadSheet(slug));
+    } catch (error) {
+      pageState.storageMode = "bundled";
+      throw error;
+    }
   }
 
   const localData = loadFromStorage(slug);
@@ -221,7 +193,7 @@ async function loadSheetData(slug) {
 }
 
 function getStorageLabel() {
-  if (pageState.storageMode === "googledrive") return "Saved in Google Drive";
+  if (pageState.storageMode === "googlesheets") return "Synced with Google Sheet";
   if (pageState.storageMode === "browser") return "Saved in browser only";
   return "Loaded from Excel import";
 }
@@ -234,7 +206,7 @@ function ensureFooter() {
   if (document.querySelector(".footer")) return;
   const footer = document.createElement("footer");
   footer.className = "footer container";
-  footer.innerHTML = "<p>Trading Journal - KJP | Google Drive Cloud + GitHub Pages</p>";
+  footer.innerHTML = "<p>Trading Journal - KJP | Google Sheets Sync + GitHub Pages</p>";
   document.body.appendChild(footer);
 }
 
@@ -269,24 +241,69 @@ function updateCell(rowIndex, colIndex, value) {
   }
   sheetData.cells[rowIndex][colIndex] = value;
   pageState.dirty = true;
+  pageState.dirtyCells.set(`${rowIndex}:${colIndex}`, value);
   renderSheetPage(document.getElementById("sheet-root"));
 }
 
-function addRow() {
+async function addRow() {
   const { sheetData } = pageState;
+  const root = document.getElementById("sheet-root");
+  const addButton = root?.querySelector('[data-action="add-row"]');
+
+  if (window.GoogleDriveSync?.isSignedIn()) {
+    if (addButton) {
+      addButton.disabled = true;
+      addButton.textContent = "Adding...";
+    }
+    try {
+      await GoogleDriveSync.insertRowAt(pageState.slug, sheetData.rowCount);
+      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.dirtyCells.clear();
+      pageState.dirty = false;
+      pageState.storageMode = "googlesheets";
+      renderSheetPage(root);
+    } catch (error) {
+      alert(error.message || "Could not add a row in your Google Sheet.");
+      if (addButton) {
+        addButton.disabled = false;
+        addButton.textContent = "Add Row";
+      }
+    }
+    return;
+  }
+
   const newRow = Array.from({ length: sheetData.colCount }, () => "");
   sheetData.cells.push(newRow);
   sheetData.rowCount = sheetData.cells.length;
   pageState.dirty = true;
-  renderSheetPage(document.getElementById("sheet-root"));
+  renderSheetPage(root);
 }
 
-function deleteRow(rowIndex) {
+async function deleteRow(rowIndex) {
   const { sheetData } = pageState;
+  const root = document.getElementById("sheet-root");
+
+  if (window.GoogleDriveSync?.isSignedIn()) {
+    const confirmed = window.confirm("Delete this row from your Google Sheet? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      await GoogleDriveSync.deleteRowAt(pageState.slug, rowIndex);
+      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.dirtyCells.clear();
+      pageState.dirty = false;
+      pageState.storageMode = "googlesheets";
+      renderSheetPage(root);
+    } catch (error) {
+      alert(error.message || "Could not delete that row in your Google Sheet.");
+    }
+    return;
+  }
+
   sheetData.cells.splice(rowIndex, 1);
   sheetData.rowCount = sheetData.cells.length;
   pageState.dirty = true;
-  renderSheetPage(document.getElementById("sheet-root"));
+  renderSheetPage(root);
 }
 
 async function saveCurrentSheet() {
@@ -299,8 +316,10 @@ async function saveCurrentSheet() {
 
   try {
     if (window.GoogleDriveSync?.isSignedIn()) {
-      pageState.sheetData = await GoogleDriveSync.saveSheet(pageState.slug, pageState.sheetData);
-      pageState.storageMode = "googledrive";
+      await GoogleDriveSync.saveDirtyCells(pageState.slug, pageState.dirtyCells);
+      pageState.dirtyCells.clear();
+      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.storageMode = "googlesheets";
       pageState.dirty = false;
       clearStorage(pageState.slug);
     } else {
@@ -313,6 +332,35 @@ async function saveCurrentSheet() {
     if (saveButton) {
       saveButton.disabled = false;
       saveButton.textContent = "Save";
+    }
+  }
+}
+
+async function syncCurrentSheet() {
+  if (!pageState.slug) {
+    await initHomePage();
+    return;
+  }
+
+  const root = document.getElementById("sheet-root");
+
+  try {
+    if (window.GoogleDriveSync?.isSignedIn() && pageState.dirtyCells.size > 0) {
+      await GoogleDriveSync.saveDirtyCells(pageState.slug, pageState.dirtyCells);
+      pageState.dirtyCells.clear();
+    }
+
+    pageState.sheetData = await loadSheetData(pageState.slug);
+    pageState.dirty = false;
+    renderSheetPage(root);
+  } catch (error) {
+    if (root) {
+      root.innerHTML = `
+        <div class="error-state panel">
+          <h2>Could not sync with Google Sheet</h2>
+          <p>${error.message}</p>
+        </div>
+      `;
     }
   }
 }
@@ -344,6 +392,20 @@ function importSheetFromFile(file) {
 }
 
 async function resetToExcel() {
+  if (window.GoogleDriveSync?.isSignedIn()) {
+    const confirmed = window.confirm(
+      "This will discard any unsaved local edits and reload the latest data from your Google Sheet. Continue?"
+    );
+    if (!confirmed) return;
+
+    pageState.dirtyCells.clear();
+    pageState.dirty = false;
+    pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+    pageState.storageMode = "googlesheets";
+    renderSheetPage(document.getElementById("sheet-root"));
+    return;
+  }
+
   const confirmed = window.confirm(
     "This will remove your saved edits for this sheet and reload the original Excel import. Continue?"
   );
@@ -351,15 +413,8 @@ async function resetToExcel() {
 
   clearStorage(pageState.slug);
   pageState.dirty = false;
-
-  if (window.GoogleDriveSync?.isSignedIn()) {
-    const fresh = normalizeSheetData(await fetchJson(`../data/${pageState.slug}.json`));
-    pageState.sheetData = await GoogleDriveSync.saveSheet(pageState.slug, fresh);
-    pageState.storageMode = "googledrive";
-  } else {
-    pageState.sheetData = normalizeSheetData(await fetchJson(`../data/${pageState.slug}.json`));
-    pageState.storageMode = "bundled";
-  }
+  pageState.sheetData = normalizeSheetData(await fetchJson(`../data/${pageState.slug}.json`));
+  pageState.storageMode = "bundled";
 
   renderSheetPage(document.getElementById("sheet-root"));
 }
@@ -453,7 +508,9 @@ function renderSheetPage(container) {
         <button class="button" type="button" data-action="add-row">Add Row</button>
         <button class="button" type="button" data-action="export">Export JSON</button>
         <button class="button" type="button" data-action="import">Import JSON</button>
-        <button class="button" type="button" data-action="reset">Reset to Excel</button>
+        <button class="button" type="button" data-action="reset">${
+          GoogleDriveSync?.isSignedIn() ? "Reload from Sheet" : "Reset to Excel"
+        }</button>
         <a class="button" href="../index.html">Back to Home</a>
         <input class="import-input" type="file" accept="application/json,.json" data-action="import-file" />
       </div>
@@ -463,8 +520,8 @@ function renderSheetPage(container) {
         ${
           editMode
             ? GoogleDriveSync?.isSignedIn()
-              ? "Edit mode is on. Click Save to store changes in your Google Drive cloud folder."
-              : "Edit mode is on. Sign in with Google to save edits everywhere via Google Drive."
+              ? "Edit mode is on. Click Save or Sync Now to write your changes directly into your Google Sheet."
+              : "Edit mode is on. Sign in with Google to sync edits directly with your Google Sheet."
             : "Turn on Edit Mode to update data directly on this page."
         }
       </p>
@@ -507,6 +564,7 @@ async function initSheetPage(slug) {
   pageState.editMode = false;
   pageState.searchTerm = "";
   pageState.dirty = false;
+  pageState.dirtyCells.clear();
 
   setActiveNav(slug);
   root.innerHTML = `<div class="loading-state panel">Loading ${slug}...</div>`;
@@ -546,15 +604,15 @@ async function initHomePage() {
         <div class="value value-small">Loading your pages...</div>
       </div>
     `;
-  cardsRoot.innerHTML = `<div class="loading-state panel">Loading pages from Google Drive...</div>`;
+  cardsRoot.innerHTML = `<div class="loading-state panel">Loading pages...</div>`;
   const lastUpdated = document.getElementById("last-updated");
   if (lastUpdated) {
     lastUpdated.textContent = "Loading...";
   }
 
   try {
-    const manifest = await loadHomeManifestWithRetry();
-    const storageLabel = "Google Drive";
+    const manifest = await fetchJson("data/manifest.json");
+    const storageLabel = "Google Sheet";
     if (lastUpdated) {
       lastUpdated.textContent = manifest.updatedAt;
     }
@@ -608,15 +666,7 @@ async function bootstrapApp(startFn) {
     GoogleDriveSync.renderAuthUI(authRoot);
   }
 
-  window.addEventListener("tradingjournal:sync", async () => {
-    if (pageState.slug) {
-      pageState.sheetData = await loadSheetData(pageState.slug);
-      pageState.dirty = false;
-      renderSheetPage(document.getElementById("sheet-root"));
-    } else {
-      await initHomePage();
-    }
-  });
+  window.addEventListener("tradingjournal:sync", syncCurrentSheet);
 
   await startFn();
 }
