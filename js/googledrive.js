@@ -338,33 +338,49 @@ const GoogleDriveSync = (() => {
 
   function renderAuthUI(container) {
     if (!container) return;
+    const compact = container.dataset.authCompact === "true";
 
     if (!isConfigured()) {
-      container.innerHTML = `
-        <div class="auth-panel warning">
-          <span>Google Drive not configured yet</span>
-          <a class="button" href="${getHomeHref()}#setup">Setup guide</a>
-        </div>
-      `;
+      container.innerHTML = compact
+        ? `<div class="auth-compact"><a class="button" href="${getHomeHref()}#setup">Setup</a></div>`
+        : `
+            <div class="auth-panel warning">
+              <span>Google Drive not configured yet</span>
+              <a class="button" href="${getHomeHref()}#setup">Setup guide</a>
+            </div>
+          `;
       return;
     }
 
     if (isSignedIn()) {
-      container.innerHTML = `
-        <div class="auth-panel connected">
-          <span class="auth-user">Signed in to Google Drive</span>
-          <span class="auth-cloud">Cloud: Google Drive</span>
-          <button class="button" type="button" data-auth-action="sync">Sync Now</button>
-          <button class="button" type="button" data-auth-action="signout">Sign Out</button>
-        </div>
-      `;
+      container.innerHTML = compact
+        ? `
+            <div class="auth-compact">
+              <button class="button" type="button" data-auth-action="sync">Sync Now</button>
+              <button class="button" type="button" data-auth-action="signout">Sign Out</button>
+            </div>
+          `
+        : `
+            <div class="auth-panel connected">
+              <span class="auth-user">Signed in to Google Drive</span>
+              <span class="auth-cloud">Cloud: Google Drive</span>
+              <button class="button" type="button" data-auth-action="sync">Sync Now</button>
+              <button class="button" type="button" data-auth-action="signout">Sign Out</button>
+            </div>
+          `;
     } else {
-      container.innerHTML = `
-        <div class="auth-panel">
-          <span>Sign in to save edits everywhere via Google Drive</span>
-          <button class="button button-primary" type="button" data-auth-action="signin">Sign in with Google</button>
-        </div>
-      `;
+      container.innerHTML = compact
+        ? `
+            <div class="auth-compact">
+              <button class="button button-primary" type="button" data-auth-action="signin">Sign in with Google</button>
+            </div>
+          `
+        : `
+            <div class="auth-panel">
+              <span>Sign in to save edits everywhere via Google Drive</span>
+              <button class="button button-primary" type="button" data-auth-action="signin">Sign in with Google</button>
+            </div>
+          `;
     }
 
     container.querySelector('[data-auth-action="signin"]')?.addEventListener("click", async () => {
