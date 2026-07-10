@@ -69,7 +69,21 @@ async function loadHomeManifestWithRetry() {
   throw lastError || new Error("Could not load pages from Google Drive.");
 }
 
-function formatCellValue(value) {
+const SHEET_COLUMN_RULES = {
+  "net-pnl-jp": {
+    0: "plain",
+    1: "date",
+    2: "plain",
+    3: "percent",
+    7: "plain",
+  },
+};
+
+function getColumnRule(slug, colIndex) {
+  return SHEET_COLUMN_RULES[slug]?.[colIndex] || "auto";
+}
+
+function formatCellValue(value, columnRule = "auto") {
   if (value === null || value === undefined || value === "") {
     return { display: "", className: "empty", raw: "" };
   }
@@ -80,8 +94,27 @@ function formatCellValue(value) {
   }
 
   const numeric = Number(text);
-  if (!Number.isNaN(numeric) && text !== "") {
-    if (numeric > 40000 && numeric < 60000 && !text.includes(".")) {
+  const isNumeric = !Number.isNaN(numeric) && text !== "";
+
+  if (columnRule === "date" && isNumeric) {
+    const excelDate = excelSerialToDate(numeric);
+    if (excelDate) {
+      return { display: excelDate, className: "date", raw: text };
+    }
+  }
+
+  if (columnRule === "percent" && isNumeric) {
+    const formatted = formatNumber(numeric * 100);
+    return { display: `${formatted}%`, className: "number", raw: text };
+  }
+
+  if (columnRule === "plain" && isNumeric) {
+    const formatted = formatNumber(numeric);
+    return { display: formatted, className: "number", raw: text };
+  }
+
+  if (isNumeric) {
+    if (numeric > 40000 && numeric < 60000 && Number.isInteger(numeric)) {
       const excelDate = excelSerialToDate(numeric);
       if (excelDate) {
         return { display: excelDate, className: "date", raw: text };
@@ -376,7 +409,8 @@ function renderSheetPage(container) {
         });
         td.appendChild(input);
       } else {
-        const formatted = formatCellValue(rawValue);
+        const columnRule = getColumnRule(pageState.slug, col);
+        const formatted = formatCellValue(rawValue, columnRule);
         td.textContent = formatted.display;
         td.className = formatted.className;
       }
