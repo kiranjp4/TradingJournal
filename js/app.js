@@ -210,6 +210,13 @@ function ensureFooter() {
   document.body.appendChild(footer);
 }
 
+function updateSaveStatusIndicator() {
+  const statusEl = document.querySelector(".save-status");
+  if (!statusEl) return;
+  statusEl.classList.toggle("unsaved", pageState.dirty);
+  statusEl.textContent = pageState.dirty ? "Unsaved changes" : "All changes saved";
+}
+
 function setActiveNav(slug) {
   document.querySelectorAll("[data-nav-slug]").forEach((link) => {
     link.classList.toggle("active", link.dataset.navSlug === slug);
@@ -242,7 +249,13 @@ function updateCell(rowIndex, colIndex, value) {
   sheetData.cells[rowIndex][colIndex] = value;
   pageState.dirty = true;
   pageState.dirtyCells.set(`${rowIndex}:${colIndex}`, value);
-  renderSheetPage(document.getElementById("sheet-root"));
+  // Avoid a full re-render here: editing a cell fires this via the input's
+  // "change" event (on blur), which happens right as a click on another
+  // button (e.g. Save) is in progress. Re-rendering the whole toolbar at
+  // that exact moment can destroy/replace the button before the click is
+  // delivered, requiring a second click. Only the small status indicator
+  // needs to update after a cell edit.
+  updateSaveStatusIndicator();
 }
 
 async function addRow() {
@@ -365,34 +378,6 @@ async function syncCurrentSheet() {
   }
 }
 
-async function resetToExcel() {
-  if (window.GoogleDriveSync?.isSignedIn()) {
-    const confirmed = window.confirm(
-      "This will discard any unsaved local edits and reload the latest data from your Google Sheet. Continue?"
-    );
-    if (!confirmed) return;
-
-    pageState.dirtyCells.clear();
-    pageState.dirty = false;
-    pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
-    pageState.storageMode = "googlesheets";
-    renderSheetPage(document.getElementById("sheet-root"));
-    return;
-  }
-
-  const confirmed = window.confirm(
-    "This will remove your saved edits for this sheet and reload the original Excel import. Continue?"
-  );
-  if (!confirmed) return;
-
-  clearStorage(pageState.slug);
-  pageState.dirty = false;
-  pageState.sheetData = normalizeSheetData(await fetchJson(`../data/${pageState.slug}.json`));
-  pageState.storageMode = "bundled";
-
-  renderSheetPage(document.getElementById("sheet-root"));
-}
-
 function toggleEditMode() {
   pageState.editMode = !pageState.editMode;
   renderSheetPage(document.getElementById("sheet-root"));
@@ -480,9 +465,6 @@ function renderSheetPage(container) {
         <button class="button" type="button" data-action="toggle-edit">${editMode ? "View Mode" : "Edit Mode"}</button>
         <button class="button button-primary" type="button" data-action="save">Save</button>
         <button class="button" type="button" data-action="add-row">Add Row</button>
-        <button class="button" type="button" data-action="reset">${
-          GoogleDriveSync?.isSignedIn() ? "Reload from Sheet" : "Reset to Excel"
-        }</button>
       </div>
     </div>
     <div class="edit-banner">
@@ -514,7 +496,6 @@ function renderSheetPage(container) {
   container.querySelector('[data-action="toggle-edit"]').addEventListener("click", toggleEditMode);
   container.querySelector('[data-action="save"]').addEventListener("click", saveCurrentSheet);
   container.querySelector('[data-action="add-row"]').addEventListener("click", addRow);
-  container.querySelector('[data-action="reset"]').addEventListener("click", resetToExcel);
 }
 
 async function initSheetPage(slug) {
