@@ -51,6 +51,7 @@ body.home-page::before {
 }
 
 .nature-only {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -58,6 +59,13 @@ body.home-page::before {
   align-items: center;
   gap: 18px;
   padding: 28px;
+}
+
+.home-signout-corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
 }
 
 .home-center-login {
