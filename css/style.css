@@ -81,7 +81,7 @@ body.home-page::before {
 }
 
 .home-pages {
-  width: min(1200px, 100%);
+  width: min(1600px, calc(100% - 32px));
   position: relative;
   z-index: 1;
 }
@@ -123,7 +123,7 @@ a {
 }
 
 .container {
-  width: min(1400px, calc(100% - 32px));
+  width: min(1760px, calc(100% - 32px));
   margin: 0 auto;
 }
 
