@@ -365,32 +365,6 @@ async function syncCurrentSheet() {
   }
 }
 
-function exportCurrentSheet() {
-  const blob = new Blob([JSON.stringify(pageState.sheetData, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${pageState.slug}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function importSheetFromFile(file) {
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    try {
-      const imported = normalizeSheetData(JSON.parse(event.target.result));
-      pageState.sheetData = imported;
-      await saveCurrentSheet();
-    } catch (error) {
-      alert("Could not import file. Please choose a valid JSON backup.");
-    }
-  };
-  reader.readAsText(file);
-}
-
 async function resetToExcel() {
   if (window.GoogleDriveSync?.isSignedIn()) {
     const confirmed = window.confirm(
@@ -506,13 +480,9 @@ function renderSheetPage(container) {
         <button class="button" type="button" data-action="toggle-edit">${editMode ? "View Mode" : "Edit Mode"}</button>
         <button class="button button-primary" type="button" data-action="save">Save</button>
         <button class="button" type="button" data-action="add-row">Add Row</button>
-        <button class="button" type="button" data-action="export">Export JSON</button>
-        <button class="button" type="button" data-action="import">Import JSON</button>
         <button class="button" type="button" data-action="reset">${
           GoogleDriveSync?.isSignedIn() ? "Reload from Sheet" : "Reset to Excel"
         }</button>
-        <a class="button" href="../index.html">Back to Home</a>
-        <input class="import-input" type="file" accept="application/json,.json" data-action="import-file" />
       </div>
     </div>
     <div class="edit-banner">
@@ -544,16 +514,7 @@ function renderSheetPage(container) {
   container.querySelector('[data-action="toggle-edit"]').addEventListener("click", toggleEditMode);
   container.querySelector('[data-action="save"]').addEventListener("click", saveCurrentSheet);
   container.querySelector('[data-action="add-row"]').addEventListener("click", addRow);
-  container.querySelector('[data-action="export"]').addEventListener("click", exportCurrentSheet);
   container.querySelector('[data-action="reset"]').addEventListener("click", resetToExcel);
-
-  const importInput = container.querySelector('[data-action="import-file"]');
-  container.querySelector('[data-action="import"]').addEventListener("click", () => importInput.click());
-  importInput.addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (file) importSheetFromFile(file);
-    event.target.value = "";
-  });
 }
 
 async function initSheetPage(slug) {

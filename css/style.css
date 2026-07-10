@@ -573,10 +573,6 @@ main,
   gap: 8px;
 }
 
-.import-input {
-  display: none;
-}
-
 .auth-panel {
   display: flex;
   flex-wrap: wrap;
