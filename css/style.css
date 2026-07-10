@@ -447,8 +447,12 @@ main,
   padding: 14px;
   border-radius: var(--radius);
   border: 1px solid rgba(36, 50, 77, 0.75);
-  background: rgba(17, 26, 46, 0.7);
+  background: rgba(17, 26, 46, 0.94);
+  backdrop-filter: blur(10px);
   box-shadow: var(--shadow-soft);
+  position: sticky;
+  top: calc(var(--header-height, 76px) + 10px);
+  z-index: 15;
 }
 
 .page-toolbar h1 {
@@ -574,6 +578,20 @@ main,
 
 .data-table td.cell-bold {
   font-weight: 700;
+}
+
+.data-table td.cell-has-dropdown {
+  position: relative;
+  padding-right: 24px;
+}
+
+.dropdown-caret {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--accent);
 }
 
 .row-actions {

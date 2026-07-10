@@ -461,10 +461,22 @@ function renderSheetPage(container) {
       } else {
         const columnRule = getColumnRule(pageState.slug, col);
         const formatted = formatCellValue(rawValue, columnRule);
-        td.textContent = formatted.display;
         td.className = formatted.className;
         if (sheetData.boldCells?.[cellKey]) {
           td.classList.add("cell-bold");
+        }
+        if (sheetData.dropdownCells?.[cellKey]) {
+          td.classList.add("cell-has-dropdown");
+          td.innerHTML = "";
+          const textSpan = document.createElement("span");
+          textSpan.textContent = formatted.display;
+          const caret = document.createElement("span");
+          caret.className = "dropdown-caret";
+          caret.textContent = "▾";
+          td.appendChild(textSpan);
+          td.appendChild(caret);
+        } else {
+          td.textContent = formatted.display;
         }
       }
 
@@ -639,14 +651,23 @@ async function initHomePage() {
   }
 }
 
+function syncHeaderHeightVar() {
+  const header = document.querySelector(".site-header");
+  if (!header) return;
+  document.documentElement.style.setProperty("--header-height", `${header.offsetHeight}px`);
+}
+
 async function bootstrapApp(startFn) {
   const authRoot = document.getElementById("auth-root");
   ensureFooter();
+  syncHeaderHeightVar();
   if (window.GoogleDriveSync) {
     await GoogleDriveSync.initialize();
     GoogleDriveSync.renderAuthUI(authRoot);
+    syncHeaderHeightVar();
   }
 
+  window.addEventListener("resize", syncHeaderHeightVar);
   window.addEventListener("tradingjournal:sync", syncCurrentSheet);
 
   await startFn();
