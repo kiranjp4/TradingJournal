@@ -22,7 +22,7 @@
 
 window.TRADING_JOURNAL_CONFIG = {
   googleClientId: "708905534457-c606sq3fk1ucfp4qs1mes26gcfnupv5c.apps.googleusercontent.com",
-  googleSheetId: "PASTE_YOUR_GOOGLE_SHEET_ID",
+  googleSheetId: "1Xnra2-5yR_3Lv7geblDnku2tsemV6MyUeoLYHx_u7kE",
   sheetTabOverrides: {
     // "net-pnl-jp": "Your_Actual_Tab_Name",
   },
