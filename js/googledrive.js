@@ -24,6 +24,7 @@ const GoogleDriveSync = (() => {
   let tokenClient = null;
   let signInPromise = null;
   const sheetIdCache = new Map();
+  const rangeOptionsCache = new Map();
 
   function getConfig() {
     return window.TRADING_JOURNAL_CONFIG || {};
@@ -212,10 +213,91 @@ const GoogleDriveSync = (() => {
     return data.values || [];
   }
 
+  async function resolveRangeOptions(fullRangeRef) {
+    if (rangeOptionsCache.has(fullRangeRef)) return rangeOptionsCache.get(fullRangeRef);
+
+    const promise = (async () => {
+      try {
+        const url = `${SHEETS_API_BASE}/${getSpreadsheetId()}/values/${encodeURIComponent(
+          fullRangeRef
+        )}?valueRenderOption=UNFORMATTED_VALUE`;
+        const response = await authFetch(url);
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        return (data.values || [])
+          .flat()
+          .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
+          .filter((value) => value !== "");
+      } catch (error) {
+        return [];
+      }
+    })();
+
+    rangeOptionsCache.set(fullRangeRef, promise);
+    return promise;
+  }
+
+  async function readSheetFormatting(tabName) {
+    try {
+      const params = new URLSearchParams({
+        ranges: `'${tabName}'`,
+        includeGridData: "true",
+        fields: "sheets.data.rowData.values(userEnteredFormat.textFormat.bold,dataValidation)",
+      });
+      const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?${params.toString()}`);
+      if (!response.ok) return { bold: {}, dropdowns: {} };
+
+      const data = await response.json();
+      const rowData = data.sheets?.[0]?.data?.[0]?.rowData || [];
+      const bold = {};
+      const dropdowns = {};
+      const rangeDropdownCells = [];
+
+      rowData.forEach((row, rowIndex) => {
+        (row.values || []).forEach((cell, colIndex) => {
+          const key = `${rowIndex}:${colIndex}`;
+
+          if (cell.userEnteredFormat?.textFormat?.bold) {
+            bold[key] = true;
+          }
+
+          const condition = cell.dataValidation?.condition;
+          if (!condition) return;
+
+          if (condition.type === "ONE_OF_LIST" && condition.values?.length) {
+            const options = condition.values
+              .map((entry) => entry.userEnteredValue)
+              .filter((value) => value !== undefined && value !== null && value !== "");
+            if (options.length) dropdowns[key] = options;
+          } else if (condition.type === "ONE_OF_RANGE" && condition.values?.[0]?.userEnteredValue) {
+            const rawRangeRef = condition.values[0].userEnteredValue;
+            const fullRangeRef = rawRangeRef.includes("!") ? rawRangeRef : `'${tabName}'!${rawRangeRef}`;
+            rangeDropdownCells.push({ key, fullRangeRef });
+          }
+        });
+      });
+
+      if (rangeDropdownCells.length) {
+        const uniqueRanges = [...new Set(rangeDropdownCells.map((item) => item.fullRangeRef))];
+        const resolved = await Promise.all(uniqueRanges.map((rangeRef) => resolveRangeOptions(rangeRef)));
+        const rangeOptionsMap = new Map(uniqueRanges.map((rangeRef, index) => [rangeRef, resolved[index]]));
+        rangeDropdownCells.forEach(({ key, fullRangeRef }) => {
+          const options = rangeOptionsMap.get(fullRangeRef);
+          if (options && options.length) dropdowns[key] = options;
+        });
+      }
+
+      return { bold, dropdowns };
+    } catch (error) {
+      return { bold: {}, dropdowns: {} };
+    }
+  }
+
   async function loadSheet(slug) {
     const tabName = getTabName(slug);
-    const values = await readSheetValues(tabName);
     const meta = SHEET_META[slug] || {};
+    const [values, formatting] = await Promise.all([readSheetValues(tabName), readSheetFormatting(tabName)]);
     const rowCount = values.length;
     const colCount = values.reduce((max, row) => Math.max(max, row.length), 0);
 
@@ -228,6 +310,8 @@ const GoogleDriveSync = (() => {
       rowCount,
       colCount,
       cells: values,
+      boldCells: formatting.bold,
+      dropdownCells: formatting.dropdowns,
     };
   }
 

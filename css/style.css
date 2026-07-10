@@ -568,6 +568,14 @@ main,
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+.cell-select {
+  cursor: pointer;
+}
+
+.data-table td.cell-bold {
+  font-weight: 700;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;

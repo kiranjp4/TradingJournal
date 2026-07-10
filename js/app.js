@@ -168,6 +168,8 @@ function normalizeSheetData(sheetData) {
     rowCount: cells.length,
     colCount: cells.reduce((max, row) => Math.max(max, row.length), 0),
     cells,
+    boldCells: sheetData.boldCells || {},
+    dropdownCells: sheetData.dropdownCells || {},
   };
 }
 
@@ -414,19 +416,56 @@ function renderSheetPage(container) {
       const td = document.createElement("td");
       const rawValue = row[col] ?? "";
 
+      const cellKey = `${rowIndex}:${col}`;
+
       if (editMode) {
-        const input = document.createElement("input");
-        input.className = "cell-input";
-        input.value = rawValue;
-        input.addEventListener("change", (event) => {
-          updateCell(rowIndex, col, event.target.value);
-        });
-        td.appendChild(input);
+        const dropdownOptions = sheetData.dropdownCells?.[cellKey];
+
+        if (dropdownOptions && dropdownOptions.length) {
+          const select = document.createElement("select");
+          select.className = "cell-input cell-select";
+
+          const blankOption = document.createElement("option");
+          blankOption.value = "";
+          blankOption.textContent = "";
+          select.appendChild(blankOption);
+
+          if (rawValue && !dropdownOptions.includes(rawValue)) {
+            const currentOption = document.createElement("option");
+            currentOption.value = rawValue;
+            currentOption.textContent = rawValue;
+            select.appendChild(currentOption);
+          }
+
+          dropdownOptions.forEach((optionValue) => {
+            const option = document.createElement("option");
+            option.value = optionValue;
+            option.textContent = optionValue;
+            select.appendChild(option);
+          });
+
+          select.value = rawValue;
+          select.addEventListener("change", (event) => {
+            updateCell(rowIndex, col, event.target.value);
+          });
+          td.appendChild(select);
+        } else {
+          const input = document.createElement("input");
+          input.className = "cell-input";
+          input.value = rawValue;
+          input.addEventListener("change", (event) => {
+            updateCell(rowIndex, col, event.target.value);
+          });
+          td.appendChild(input);
+        }
       } else {
         const columnRule = getColumnRule(pageState.slug, col);
         const formatted = formatCellValue(rawValue, columnRule);
         td.textContent = formatted.display;
         td.className = formatted.className;
+        if (sheetData.boldCells?.[cellKey]) {
+          td.classList.add("cell-bold");
+        }
       }
 
       tr.appendChild(td);
