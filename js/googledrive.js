@@ -412,6 +412,7 @@ const GoogleDriveSync = (() => {
   function renderAuthUI(container) {
     if (!container) return;
     const compact = container.dataset.authCompact === "true";
+    const isHome = container.dataset.authMode === "home";
 
     if (!isConfigured()) {
       container.innerHTML = compact
@@ -425,21 +426,30 @@ const GoogleDriveSync = (() => {
     }
 
     if (isSignedIn()) {
-      container.innerHTML = compact
-        ? `
-            <div class="auth-compact">
-              <button class="button" type="button" data-auth-action="sync">Sync Now</button>
-              <button class="button" type="button" data-auth-action="signout">Sign Out</button>
-            </div>
-          `
-        : `
-            <div class="auth-panel connected">
-              <span class="auth-user">Signed in to Google</span>
-              <span class="auth-cloud">Synced with Google Sheet</span>
-              <button class="button" type="button" data-auth-action="sync">Sync Now</button>
-              <button class="button" type="button" data-auth-action="signout">Sign Out</button>
-            </div>
-          `;
+      if (isHome) {
+        container.innerHTML = `
+          <div class="auth-panel connected">
+            <span class="auth-user">Signed in to Google</span>
+            <span class="auth-cloud">Synced with Google Sheet</span>
+          </div>
+        `;
+      } else {
+        container.innerHTML = compact
+          ? `
+              <div class="auth-compact">
+                <button class="button" type="button" data-auth-action="sync">Sync Now</button>
+                <button class="button" type="button" data-auth-action="signout">Sign Out</button>
+              </div>
+            `
+          : `
+              <div class="auth-panel connected">
+                <span class="auth-user">Signed in to Google</span>
+                <span class="auth-cloud">Synced with Google Sheet</span>
+                <button class="button" type="button" data-auth-action="sync">Sync Now</button>
+                <button class="button" type="button" data-auth-action="signout">Sign Out</button>
+              </div>
+            `;
+      }
     } else {
       container.innerHTML = compact
         ? `
@@ -474,6 +484,21 @@ const GoogleDriveSync = (() => {
     });
   }
 
+  function renderSignOutCorner(container) {
+    if (!container) return;
+
+    if (!isConfigured() || !isSignedIn()) {
+      container.innerHTML = "";
+      return;
+    }
+
+    container.innerHTML = `<button class="button" type="button" data-auth-action="signout">Sign Out</button>`;
+    container.querySelector('[data-auth-action="signout"]')?.addEventListener("click", () => {
+      signOut();
+      window.location.reload();
+    });
+  }
+
   return {
     initialize,
     isConfigured,
@@ -485,6 +510,7 @@ const GoogleDriveSync = (() => {
     insertRowAt,
     deleteRowAt,
     renderAuthUI,
+    renderSignOutCorner,
     getTabName,
   };
 })();

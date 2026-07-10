@@ -581,6 +581,7 @@ async function initHomePage() {
   const cardsRoot = document.getElementById("cards-root");
   const statsRoot = document.getElementById("stats-root");
   const pagesPanel = document.getElementById("pages-panel");
+  window.GoogleDriveSync?.renderSignOutCorner(document.getElementById("home-signout"));
   if (!cardsRoot || !statsRoot) return;
 
   if (!window.GoogleDriveSync?.isSignedIn()) {
