@@ -72,7 +72,7 @@ function formatCellValue(value, columnRule = "auto") {
   }
 
   if (columnRule === "percent" && isNumeric) {
-    const formatted = formatNumber(numeric * 100);
+    const formatted = formatPercent(numeric * 100);
     return { display: `${formatted}%`, className: "number", raw: text };
   }
 
@@ -109,6 +109,10 @@ function excelSerialToDate(serial) {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatPercent(value) {
+  return value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatNumber(value) {
