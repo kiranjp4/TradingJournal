@@ -667,7 +667,7 @@ main,
 .data-table th,
 .data-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(36, 50, 77, 0.75);
+  border: 1px solid rgba(59, 130, 246, 0.22);
   text-align: left;
   vertical-align: top;
   white-space: nowrap;
@@ -676,8 +676,12 @@ main,
 .data-table th {
   position: sticky;
   top: 0;
-  background: #17233b;
-  color: #d7e4ff;
+  background: linear-gradient(180deg, #1f3f6e, #162c4d);
+  color: #eaf2ff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-color: rgba(59, 130, 246, 0.45);
+  border-bottom: 2px solid var(--accent);
   z-index: 2;
 }
 
