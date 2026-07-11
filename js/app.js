@@ -600,7 +600,9 @@ function renderSheetPage(container) {
     </div>
   `;
 
-  container.querySelector(".table-wrap").appendChild(table);
+  const tableWrap = container.querySelector(".table-wrap");
+  tableWrap.appendChild(table);
+  syncStickyScrollbar(tableWrap);
 
   container.querySelector(".search-input").addEventListener("input", (event) => {
     pageState.searchTerm = event.target.value;
@@ -720,6 +722,55 @@ function syncHeaderHeightVar() {
   const header = document.querySelector(".site-header");
   if (!header) return;
   document.documentElement.style.setProperty("--header-height", `${header.offsetHeight}px`);
+}
+
+let stickyScrollTableWrap = null;
+
+function ensureStickyScrollbar() {
+  let bar = document.getElementById("sticky-hscroll");
+  if (bar) return bar;
+
+  bar = document.createElement("div");
+  bar.id = "sticky-hscroll";
+  bar.className = "sticky-hscroll";
+  const inner = document.createElement("div");
+  inner.className = "sticky-hscroll-inner";
+  bar.appendChild(inner);
+  document.body.appendChild(bar);
+
+  bar.addEventListener("scroll", () => {
+    if (stickyScrollTableWrap && stickyScrollTableWrap.scrollLeft !== bar.scrollLeft) {
+      stickyScrollTableWrap.scrollLeft = bar.scrollLeft;
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (stickyScrollTableWrap) syncStickyScrollbar(stickyScrollTableWrap);
+  });
+
+  return bar;
+}
+
+function syncStickyScrollbar(tableWrap) {
+  stickyScrollTableWrap = tableWrap;
+  const bar = ensureStickyScrollbar();
+  const inner = bar.querySelector(".sticky-hscroll-inner");
+  const needsScroll = tableWrap.scrollWidth > tableWrap.clientWidth + 1;
+
+  bar.classList.toggle("visible", needsScroll);
+  if (!needsScroll) return;
+
+  const rect = tableWrap.getBoundingClientRect();
+  bar.style.left = `${rect.left}px`;
+  bar.style.width = `${rect.width}px`;
+  inner.style.width = `${tableWrap.scrollWidth}px`;
+  bar.scrollLeft = tableWrap.scrollLeft;
+
+  tableWrap.addEventListener("scroll", () => {
+    if (bar.scrollLeft !== tableWrap.scrollLeft) {
+      bar.scrollLeft = tableWrap.scrollLeft;
+    }
+  });
 }
 
 async function bootstrapApp(startFn) {
