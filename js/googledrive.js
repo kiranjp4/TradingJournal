@@ -316,13 +316,13 @@ const GoogleDriveSync = (() => {
         ranges: `'${tabName}'`,
         includeGridData: "true",
         fields:
-          "sheets.data.rowData.values(userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.foregroundColor,dataValidation)",
+          "sheets.data.rowData.values(userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.foregroundColor,userEnteredFormat.numberFormat.type,dataValidation)",
       });
       const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?${params.toString()}`);
       if (!response.ok) {
         const errorText = await response.text();
         console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, errorText);
-        return { bold: {}, dropdowns: {}, bg: {}, fg: {} };
+        return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
       }
 
       const data = await response.json();
@@ -331,6 +331,7 @@ const GoogleDriveSync = (() => {
       const dropdowns = {};
       const bg = {};
       const fg = {};
+      const percent = {};
       const rangeDropdownCells = [];
 
       rowData.forEach((row, rowIndex) => {
@@ -340,6 +341,10 @@ const GoogleDriveSync = (() => {
 
           if (format?.textFormat?.bold) {
             bold[key] = true;
+          }
+
+          if (format?.numberFormat?.type === "PERCENT") {
+            percent[key] = true;
           }
 
           const bgColor = format?.backgroundColor;
@@ -378,13 +383,15 @@ const GoogleDriveSync = (() => {
       console.info(
         `[TradingJournal] "${tabName}": detected ${Object.keys(bold).length} bold cell(s), ${
           Object.keys(dropdowns).length
-        } dropdown cell(s), ${Object.keys(bg).length} colored cell(s).`
+        } dropdown cell(s), ${Object.keys(bg).length} colored cell(s), ${
+          Object.keys(percent).length
+        } percent cell(s).`
       );
 
-      return { bold, dropdowns, bg, fg };
+      return { bold, dropdowns, bg, fg, percent };
     } catch (error) {
       console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, error);
-      return { bold: {}, dropdowns: {}, bg: {}, fg: {} };
+      return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
     }
   }
 
@@ -412,6 +419,7 @@ const GoogleDriveSync = (() => {
       dropdownCells: formatting.dropdowns,
       bgColors: formatting.bg,
       fgColors: formatting.fg,
+      percentCells: formatting.percent,
       rowGroups,
     };
   }

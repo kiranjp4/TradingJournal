@@ -173,6 +173,7 @@ function normalizeSheetData(sheetData) {
     dropdownCells: sheetData.dropdownCells || {},
     bgColors: sheetData.bgColors || {},
     fgColors: sheetData.fgColors || {},
+    percentCells: sheetData.percentCells || {},
     rowGroups: sheetData.rowGroups || [],
   };
 }
@@ -516,7 +517,7 @@ function renderSheetPage(container) {
           td.appendChild(input);
         }
       } else {
-        const columnRule = getColumnRule(pageState.slug, col);
+        const columnRule = sheetData.percentCells?.[cellKey] ? "percent" : getColumnRule(pageState.slug, col);
         const formatted = formatCellValue(rawValue, columnRule);
         td.className = formatted.className;
         if (sheetData.boldCells?.[cellKey]) {
