@@ -689,14 +689,15 @@ main,
 
 .sticky-hscroll {
   position: fixed;
-  bottom: 0;
-  height: 14px;
+  bottom: 14px;
+  height: 18px;
   overflow-x: auto;
   overflow-y: hidden;
   z-index: 25;
-  background: rgba(11, 18, 32, 0.94);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.28);
+  background: rgba(11, 18, 32, 0.96);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   display: none;
 }
 
@@ -709,7 +710,7 @@ main,
 }
 
 .sticky-hscroll::-webkit-scrollbar {
-  height: 12px;
+  height: 16px;
 }
 
 .sticky-hscroll::-webkit-scrollbar-track {
