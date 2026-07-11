@@ -170,6 +170,8 @@ function normalizeSheetData(sheetData) {
     cells,
     boldCells: sheetData.boldCells || {},
     dropdownCells: sheetData.dropdownCells || {},
+    bgColors: sheetData.bgColors || {},
+    fgColors: sheetData.fgColors || {},
   };
 }
 
@@ -464,6 +466,11 @@ function renderSheetPage(container) {
         td.className = formatted.className;
         if (sheetData.boldCells?.[cellKey]) {
           td.classList.add("cell-bold");
+        }
+        const bgColor = sheetData.bgColors?.[cellKey];
+        if (bgColor) {
+          td.style.backgroundColor = bgColor;
+          td.style.color = sheetData.fgColors?.[cellKey] || "#111827";
         }
         if (sheetData.dropdownCells?.[cellKey]) {
           td.classList.add("cell-has-dropdown");

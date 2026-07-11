@@ -239,32 +239,65 @@ const GoogleDriveSync = (() => {
     return promise;
   }
 
+  function isNearWhite(color) {
+    const r = color.red ?? 1;
+    const g = color.green ?? 1;
+    const b = color.blue ?? 1;
+    return r >= 0.95 && g >= 0.95 && b >= 0.95;
+  }
+
+  function isNearBlack(color) {
+    const r = color.red ?? 0;
+    const g = color.green ?? 0;
+    const b = color.blue ?? 0;
+    return r <= 0.05 && g <= 0.05 && b <= 0.05;
+  }
+
+  function toRgba(color, fallbackAlpha = 1) {
+    const r = Math.round((color.red ?? 0) * 255);
+    const g = Math.round((color.green ?? 0) * 255);
+    const b = Math.round((color.blue ?? 0) * 255);
+    const a = color.alpha === undefined ? fallbackAlpha : color.alpha;
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+
   async function readSheetFormatting(tabName) {
     try {
       const params = new URLSearchParams({
         ranges: `'${tabName}'`,
         includeGridData: "true",
-        fields: "sheets.data.rowData.values(userEnteredFormat.textFormat.bold,dataValidation)",
+        fields:
+          "sheets.data.rowData.values(userEnteredFormat.backgroundColor,userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.foregroundColor,dataValidation)",
       });
       const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?${params.toString()}`);
       if (!response.ok) {
         const errorText = await response.text();
         console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, errorText);
-        return { bold: {}, dropdowns: {} };
+        return { bold: {}, dropdowns: {}, bg: {}, fg: {} };
       }
 
       const data = await response.json();
       const rowData = data.sheets?.[0]?.data?.[0]?.rowData || [];
       const bold = {};
       const dropdowns = {};
+      const bg = {};
+      const fg = {};
       const rangeDropdownCells = [];
 
       rowData.forEach((row, rowIndex) => {
         (row.values || []).forEach((cell, colIndex) => {
           const key = `${rowIndex}:${colIndex}`;
+          const format = cell.userEnteredFormat;
 
-          if (cell.userEnteredFormat?.textFormat?.bold) {
+          if (format?.textFormat?.bold) {
             bold[key] = true;
+          }
+
+          const bgColor = format?.backgroundColor;
+          if (bgColor && !isNearWhite(bgColor)) {
+            bg[key] = toRgba(bgColor);
+            const fgColor = format?.textFormat?.foregroundColor;
+            fg[key] = fgColor && !isNearBlack(fgColor) ? toRgba(fgColor, 1) : "#111827";
           }
 
           const condition = cell.dataValidation?.condition;
@@ -296,13 +329,13 @@ const GoogleDriveSync = (() => {
       console.info(
         `[TradingJournal] "${tabName}": detected ${Object.keys(bold).length} bold cell(s), ${
           Object.keys(dropdowns).length
-        } dropdown cell(s).`
+        } dropdown cell(s), ${Object.keys(bg).length} colored cell(s).`
       );
 
-      return { bold, dropdowns };
+      return { bold, dropdowns, bg, fg };
     } catch (error) {
       console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, error);
-      return { bold: {}, dropdowns: {} };
+      return { bold: {}, dropdowns: {}, bg: {}, fg: {} };
     }
   }
 
@@ -324,6 +357,8 @@ const GoogleDriveSync = (() => {
       cells: values,
       boldCells: formatting.bold,
       dropdownCells: formatting.dropdowns,
+      bgColors: formatting.bg,
+      fgColors: formatting.fg,
     };
   }
 
