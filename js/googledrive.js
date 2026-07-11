@@ -24,6 +24,7 @@ const GoogleDriveSync = (() => {
   let tokenClient = null;
   let signInPromise = null;
   const sheetIdCache = new Map();
+  const sheetMetaCache = new Map();
   const rangeOptionsCache = new Map();
 
   function getConfig() {
@@ -132,6 +133,7 @@ const GoogleDriveSync = (() => {
     signInPromise = (async () => {
       await requestAccessToken(true);
       sheetIdCache.clear();
+      sheetMetaCache.clear();
       return true;
     })();
 
@@ -148,6 +150,7 @@ const GoogleDriveSync = (() => {
     }
     accessToken = null;
     sheetIdCache.clear();
+    sheetMetaCache.clear();
     sessionStorage.removeItem("tradingjournal-google-token");
   }
 
@@ -178,10 +181,10 @@ const GoogleDriveSync = (() => {
     return response;
   }
 
-  async function getTabSheetId(tabName) {
-    if (sheetIdCache.has(tabName)) return sheetIdCache.get(tabName);
-
-    const response = await authFetch(`${SHEETS_API_BASE}/${getSpreadsheetId()}?fields=sheets.properties`);
+  async function loadSheetMetaCache() {
+    const response = await authFetch(
+      `${SHEETS_API_BASE}/${getSpreadsheetId()}?fields=sheets(properties,rowGroups)`
+    );
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Could not read your Google Sheet structure: ${errorText}`);
@@ -190,13 +193,59 @@ const GoogleDriveSync = (() => {
     const data = await response.json();
     (data.sheets || []).forEach((sheet) => {
       sheetIdCache.set(sheet.properties.title, sheet.properties.sheetId);
+      sheetMetaCache.set(sheet.properties.title, {
+        sheetId: sheet.properties.sheetId,
+        controlAfter: Boolean(sheet.properties.gridProperties?.rowGroupControlAfter),
+        rowGroups: sheet.rowGroups || [],
+      });
     });
+  }
+
+  async function getTabSheetId(tabName) {
+    if (!sheetIdCache.has(tabName)) {
+      await loadSheetMetaCache();
+    }
 
     if (!sheetIdCache.has(tabName)) {
       throw new Error(`Could not find a tab named "${tabName}" in your Google Sheet.`);
     }
 
     return sheetIdCache.get(tabName);
+  }
+
+  async function getRowGroups(tabName) {
+    if (!sheetMetaCache.has(tabName)) {
+      try {
+        await loadSheetMetaCache();
+      } catch (error) {
+        console.warn(`[TradingJournal] Could not read row groups for "${tabName}":`, error);
+        return [];
+      }
+    }
+
+    const meta = sheetMetaCache.get(tabName);
+    if (!meta || !meta.rowGroups.length) return [];
+
+    return meta.rowGroups
+      .filter((group) => group.range.dimension !== "COLUMNS")
+      .map((group, index) => {
+        const startIndex = group.range.startIndex || 0;
+        const endIndex = group.range.endIndex;
+        // Google Sheets shows the expand/collapse toggle in the row just
+        // before the group by default, or just after it if the sheet's
+        // "summary rows after group" setting is enabled.
+        let anchorRow = meta.controlAfter ? endIndex : startIndex - 1;
+        if (anchorRow < 0) anchorRow = startIndex;
+
+        return {
+          key: `${startIndex}:${endIndex}:${group.depth || 1}:${index}`,
+          startIndex,
+          endIndex,
+          depth: group.depth || 1,
+          collapsed: Boolean(group.collapsed),
+          anchorRow,
+        };
+      });
   }
 
   async function readSheetValues(tabName) {
@@ -342,7 +391,11 @@ const GoogleDriveSync = (() => {
   async function loadSheet(slug) {
     const tabName = getTabName(slug);
     const meta = SHEET_META[slug] || {};
-    const [values, formatting] = await Promise.all([readSheetValues(tabName), readSheetFormatting(tabName)]);
+    const [values, formatting, rowGroups] = await Promise.all([
+      readSheetValues(tabName),
+      readSheetFormatting(tabName),
+      getRowGroups(tabName),
+    ]);
     const rowCount = values.length;
     const colCount = values.reduce((max, row) => Math.max(max, row.length), 0);
 
@@ -359,6 +412,7 @@ const GoogleDriveSync = (() => {
       dropdownCells: formatting.dropdowns,
       bgColors: formatting.bg,
       fgColors: formatting.fg,
+      rowGroups,
     };
   }
 

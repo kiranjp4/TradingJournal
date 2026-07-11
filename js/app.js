@@ -34,6 +34,7 @@ const pageState = {
   dirty: false,
   storageMode: "bundled",
   dirtyCells: new Map(),
+  groupCollapseState: new Map(),
 };
 
 const SHEET_COLUMN_RULES = {
@@ -172,7 +173,27 @@ function normalizeSheetData(sheetData) {
     dropdownCells: sheetData.dropdownCells || {},
     bgColors: sheetData.bgColors || {},
     fgColors: sheetData.fgColors || {},
+    rowGroups: sheetData.rowGroups || [],
   };
+}
+
+function initGroupCollapseState(rowGroups) {
+  pageState.groupCollapseState = new Map((rowGroups || []).map((group) => [group.key, group.collapsed]));
+}
+
+function isRowHiddenByGroups(rowIndex, rowGroups) {
+  return (rowGroups || []).some(
+    (group) =>
+      rowIndex >= group.startIndex &&
+      rowIndex < group.endIndex &&
+      pageState.groupCollapseState.get(group.key)
+  );
+}
+
+function toggleGroupCollapse(groupKey) {
+  const current = pageState.groupCollapseState.get(groupKey);
+  pageState.groupCollapseState.set(groupKey, !current);
+  renderSheetPage(document.getElementById("sheet-root"));
 }
 
 async function loadSheetData(slug) {
@@ -245,6 +266,10 @@ function getFilteredRows(cells, searchTerm) {
   );
 }
 
+function getGroupsAnchoredAt(rowGroups, rowIndex) {
+  return (rowGroups || []).filter((group) => group.anchorRow === rowIndex);
+}
+
 function updateCell(rowIndex, colIndex, value) {
   const { sheetData } = pageState;
   if (!sheetData.cells[rowIndex]) {
@@ -275,6 +300,7 @@ async function addRow() {
     try {
       await GoogleDriveSync.insertRowAt(pageState.slug, sheetData.rowCount);
       pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
       pageState.storageMode = "googlesheets";
@@ -307,6 +333,7 @@ async function deleteRow(rowIndex) {
     try {
       await GoogleDriveSync.deleteRowAt(pageState.slug, rowIndex);
       pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
       pageState.storageMode = "googlesheets";
@@ -336,6 +363,7 @@ async function saveCurrentSheet() {
       await GoogleDriveSync.saveDirtyCells(pageState.slug, pageState.dirtyCells);
       pageState.dirtyCells.clear();
       pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.storageMode = "googlesheets";
       pageState.dirty = false;
       clearStorage(pageState.slug);
@@ -368,6 +396,7 @@ async function syncCurrentSheet() {
     }
 
     pageState.sheetData = await loadSheetData(pageState.slug);
+    initGroupCollapseState(pageState.sheetData.rowGroups);
     pageState.dirty = false;
     renderSheetPage(root);
   } catch (error) {
@@ -389,13 +418,23 @@ function toggleEditMode() {
 
 function renderSheetPage(container) {
   const { sheetData, editMode, searchTerm, dirty } = pageState;
-  const filteredRows = getFilteredRows(sheetData.cells, searchTerm);
+  const rowGroups = sheetData.rowGroups || [];
+  const hasGroups = rowGroups.length > 0;
+  const groupVisibleRows = hasGroups
+    ? sheetData.cells.filter((row, idx) => !isRowHiddenByGroups(idx, rowGroups))
+    : sheetData.cells;
+  const filteredRows = getFilteredRows(groupVisibleRows, searchTerm);
 
   const table = document.createElement("table");
   table.className = `data-table${editMode ? " edit-mode" : ""}`;
 
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
+  if (hasGroups) {
+    const groupTh = document.createElement("th");
+    groupTh.className = "group-gutter-head";
+    headerRow.appendChild(groupTh);
+  }
   for (let col = 0; col < sheetData.colCount; col += 1) {
     const th = document.createElement("th");
     th.textContent = columnName(col);
@@ -413,6 +452,22 @@ function renderSheetPage(container) {
   filteredRows.forEach((row) => {
     const rowIndex = sheetData.cells.indexOf(row);
     const tr = document.createElement("tr");
+
+    if (hasGroups) {
+      const groupTd = document.createElement("td");
+      groupTd.className = "group-gutter";
+      getGroupsAnchoredAt(rowGroups, rowIndex).forEach((group) => {
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "group-toggle";
+        toggle.style.marginLeft = `${(group.depth - 1) * 10}px`;
+        toggle.textContent = pageState.groupCollapseState.get(group.key) ? "▸" : "▾";
+        toggle.title = pageState.groupCollapseState.get(group.key) ? "Expand group" : "Collapse group";
+        toggle.addEventListener("click", () => toggleGroupCollapse(group.key));
+        groupTd.appendChild(toggle);
+      });
+      tr.appendChild(groupTd);
+    }
 
     for (let col = 0; col < sheetData.colCount; col += 1) {
       const td = document.createElement("td");
@@ -515,6 +570,7 @@ function renderSheetPage(container) {
           <span>${sheetData.colCount} columns</span>
           <span>Updated: ${sheetData.updatedAt}</span>
           <span>Showing: ${filteredRows.length} rows</span>
+          ${hasGroups ? `<span>${rowGroups.length} row group(s)</span>` : ""}
           <span>${getStorageLabel()}</span>
         </div>
       </div>
@@ -572,6 +628,7 @@ async function initSheetPage(slug) {
   try {
     const sheetData = await loadSheetData(slug);
     pageState.sheetData = sheetData;
+    initGroupCollapseState(sheetData.rowGroups);
     renderSheetPage(root);
     document.title = `${sheetData.title} | ${SITE_TITLE}`;
   } catch (error) {
