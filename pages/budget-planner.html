@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget Planner | Trading Journal</title>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <div class="brand">
+          <strong>Trading Journal - KJP</strong>
+          <span>Budget Planner</span>
+        </div>
+        <div class="header-nav-auth">
+          <a class="button" href="../index.html">Home</a>
+          <div id="auth-root" data-auth-compact="true"></div>
+        </div>
+      </div>
+    </header>
+    <main class="container">
+      <div id="budget-root"></div>
+    </main>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/googledrive.js"></script>
+    <script src="../js/budget.js"></script>
+    <script>
+      (async () => {
+        if (window.GoogleDriveSync) {
+          await GoogleDriveSync.initialize();
+          GoogleDriveSync.renderAuthUI(document.getElementById("auth-root"));
+        }
+        BudgetPlanner.init();
+      })();
+    </script>
+  </body>
+</html>

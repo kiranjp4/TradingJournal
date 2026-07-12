@@ -1,0 +1,152 @@
+{
+  "fy": "FY 2026-27",
+  "period": "01/04/2026 to 31/03/2027",
+  "basedOn": "6-year ICICI credit card analysis (FY 2020-21 to FY 2025-26)",
+  "totalAnnualLimit": 450000,
+  "totalMonthlyLimit": 37500,
+  "sixYearAvgAnnual": 434488,
+  "sixYearAvgMonthly": 36207,
+  "fy2025_26Actual": 769191,
+  "optimizationTarget": "Reduce discretionary spend by ~41% vs FY 2025-26 spike year",
+  "months": [
+    "Apr-26",
+    "May-26",
+    "Jun-26",
+    "Jul-26",
+    "Aug-26",
+    "Sep-26",
+    "Oct-26",
+    "Nov-26",
+    "Dec-26",
+    "Jan-27",
+    "Feb-27",
+    "Mar-27"
+  ],
+  "rules": [
+    "Pay credit card bill in full before due date — zero EMI interest target",
+    "Transactions above ₹10,000 need 24-hour wait rule",
+    "Amazon: batch orders once or twice a month only",
+    "Jewellery: max 1 purchase per year, compare making charges",
+    "Use health insurance for hospital bills where possible",
+    "Use no-cost EMI or pay upfront for purchases above ₹25,000"
+  ],
+  "categories": [
+    {
+      "id": "healthcare",
+      "name": "Healthcare",
+      "annualLimit": 120000,
+      "monthlyLimit": 10000,
+      "sixYearAvg": 39808,
+      "priority": "essential",
+      "note": "Hospital, pharmacy, check-ups. Lower than FY25-26 spike but keep buffer."
+    },
+    {
+      "id": "jewellery",
+      "name": "Jewellery",
+      "annualLimit": 40000,
+      "monthlyLimit": 3333,
+      "sixYearAvg": 54238,
+      "priority": "discretionary",
+      "note": "Max 1 purchase/year. Compare making charges across jewellers."
+    },
+    {
+      "id": "amazon",
+      "name": "Amazon",
+      "annualLimit": 30000,
+      "monthlyLimit": 2500,
+      "sixYearAvg": 42085,
+      "priority": "discretionary",
+      "note": "Batch orders monthly. Set cart review before checkout."
+    },
+    {
+      "id": "retail",
+      "name": "Retail / Fashion",
+      "annualLimit": 30000,
+      "monthlyLimit": 2500,
+      "sixYearAvg": 32415,
+      "priority": "discretionary",
+      "note": "Clothing, silks, tailoring (PN Rao, Manyavar, etc.)."
+    },
+    {
+      "id": "travel",
+      "name": "Travel",
+      "annualLimit": 50000,
+      "monthlyLimit": 4167,
+      "sixYearAvg": 27793,
+      "priority": "planned",
+      "note": "Flights, hotels, packages (IXIGO, Travel Troops). Plan 1 trip/year."
+    },
+    {
+      "id": "electronics",
+      "name": "Electronics / Apple",
+      "annualLimit": 25000,
+      "monthlyLimit": 2083,
+      "sixYearAvg": 27647,
+      "priority": "planned",
+      "note": "Only when needed. Avoid EMI — use no-cost EMI if essential."
+    },
+    {
+      "id": "fuel",
+      "name": "Fuel",
+      "annualLimit": 24000,
+      "monthlyLimit": 2000,
+      "sixYearAvg": 17660,
+      "priority": "essential",
+      "note": "Petrol. Consider fuel cashback card."
+    },
+    {
+      "id": "food",
+      "name": "Food Delivery",
+      "annualLimit": 12000,
+      "monthlyLimit": 1000,
+      "sixYearAvg": 1659,
+      "priority": "discretionary",
+      "note": "Swiggy, Zomato. Cap at ~₹250/week."
+    },
+    {
+      "id": "subscriptions",
+      "name": "Subscriptions",
+      "annualLimit": 6000,
+      "monthlyLimit": 500,
+      "sixYearAvg": 6200,
+      "priority": "fixed",
+      "note": "Apple, SAE, streaming. Audit quarterly — cancel unused."
+    },
+    {
+      "id": "shopping",
+      "name": "Flipkart / Other Shopping",
+      "annualLimit": 15000,
+      "monthlyLimit": 1250,
+      "sixYearAvg": 5086,
+      "priority": "discretionary",
+      "note": "Flipkart and misc online shopping."
+    },
+    {
+      "id": "gifts",
+      "name": "Gifts / Fitness",
+      "annualLimit": 12000,
+      "monthlyLimit": 1000,
+      "sixYearAvg": 4241,
+      "priority": "discretionary",
+      "note": "Gifting, gym/fitness memberships."
+    },
+    {
+      "id": "emergency",
+      "name": "Emergency / Misc",
+      "annualLimit": 36000,
+      "monthlyLimit": 3000,
+      "sixYearAvg": 47331,
+      "priority": "buffer",
+      "note": "Unplanned expenses. If unused, roll to savings."
+    },
+    {
+      "id": "bigpurchase",
+      "name": "Big Purchase Fund",
+      "annualLimit": 46000,
+      "monthlyLimit": 3833,
+      "sixYearAvg": 0,
+      "priority": "sinking",
+      "note": "Save monthly for planned large buys (furniture, bike service). Avoid surprise EMI."
+    }
+  ]
+}
