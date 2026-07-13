@@ -592,7 +592,9 @@ function renderSheetPage(container) {
           editMode
             ? GoogleDriveSync?.isSignedIn()
               ? "Edit mode is on. Click Save or Sync Now to write your changes directly into your Google Sheet."
-              : "Edit mode is on. Sign in with Google to sync edits directly with your Google Sheet."
+              : GoogleDriveSync?.isLoginDisabled?.()
+                ? "Edit mode is on. Preview mode is active, so Save stores edits in this browser only."
+                : "Edit mode is on. Sign in with Google to sync edits directly with your Google Sheet."
             : "Turn on Edit Mode to update data directly on this page."
         }
       </p>
@@ -652,10 +654,11 @@ async function initHomePage() {
   const cardsRoot = document.getElementById("cards-root");
   const statsRoot = document.getElementById("stats-root");
   const pagesPanel = document.getElementById("pages-panel");
+  const loginDisabled = window.GoogleDriveSync?.isLoginDisabled?.() || false;
   window.GoogleDriveSync?.renderSignOutCorner(document.getElementById("home-signout"));
   if (!cardsRoot || !statsRoot) return;
 
-  if (!window.GoogleDriveSync?.isSignedIn()) {
+  if (!loginDisabled && !window.GoogleDriveSync?.isSignedIn()) {
     statsRoot.innerHTML = "";
     cardsRoot.innerHTML = "";
     pagesPanel?.classList.add("hidden");

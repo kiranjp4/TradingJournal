@@ -21,6 +21,8 @@
 //   in other cells are never overwritten.
 
 window.TRADING_JOURNAL_CONFIG = {
+  // Temporary preview mode: set to false to re-enable Google sign-in.
+  disableLogin: true,
   googleClientId: "708905534457-c606sq3fk1ucfp4qs1mes26gcfnupv5c.apps.googleusercontent.com",
   googleSheetId: "1Xnra2-5yR_3Lv7geblDnku2tsemV6MyUeoLYHx_u7kE",
   sheetTabOverrides: {

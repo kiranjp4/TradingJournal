@@ -31,6 +31,10 @@ const GoogleDriveSync = (() => {
     return window.TRADING_JOURNAL_CONFIG || {};
   }
 
+  function isLoginDisabled() {
+    return Boolean(getConfig().disableLogin);
+  }
+
   function getSpreadsheetId() {
     return getConfig().googleSheetId || "";
   }
@@ -111,8 +115,14 @@ const GoogleDriveSync = (() => {
   }
 
   async function initialize() {
+    if (isLoginDisabled()) {
+      accessToken = null;
+      sessionStorage.removeItem("tradingjournal-google-token");
+      return { configured: isConfigured(), signedIn: false, loginDisabled: true };
+    }
+
     if (!isConfigured()) {
-      return { configured: false, signedIn: false };
+      return { configured: false, signedIn: false, loginDisabled: false };
     }
 
     accessToken = sessionStorage.getItem("tradingjournal-google-token");
@@ -120,6 +130,7 @@ const GoogleDriveSync = (() => {
     return {
       configured: true,
       signedIn: Boolean(accessToken),
+      loginDisabled: false,
     };
   }
 
@@ -128,6 +139,7 @@ const GoogleDriveSync = (() => {
   }
 
   async function signIn() {
+    if (isLoginDisabled()) return false;
     if (signInPromise) return signInPromise;
 
     signInPromise = (async () => {
@@ -145,6 +157,7 @@ const GoogleDriveSync = (() => {
   }
 
   function signOut() {
+    if (isLoginDisabled()) return;
     if (accessToken && window.google?.accounts?.oauth2?.revoke) {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
@@ -511,6 +524,18 @@ const GoogleDriveSync = (() => {
     const compact = container.dataset.authCompact === "true";
     const isHome = container.dataset.authMode === "home";
 
+    if (isLoginDisabled()) {
+      container.innerHTML = compact
+        ? `<div class="auth-compact"><span class="auth-user">Preview mode (login disabled)</span></div>`
+        : `
+            <div class="auth-panel connected">
+              <span class="auth-user">Preview mode enabled</span>
+              <span class="auth-cloud">Login is temporarily disabled in js/config.js</span>
+            </div>
+          `;
+      return;
+    }
+
     if (!isConfigured()) {
       container.innerHTML = compact
         ? `<div class="auth-compact"><span class="auth-user">Google Sheet not configured</span></div>`
@@ -584,6 +609,11 @@ const GoogleDriveSync = (() => {
   function renderSignOutCorner(container) {
     if (!container) return;
 
+    if (isLoginDisabled()) {
+      container.innerHTML = "";
+      return;
+    }
+
     if (!isConfigured() || !isSignedIn()) {
       container.innerHTML = "";
       return;
@@ -600,6 +630,7 @@ const GoogleDriveSync = (() => {
     initialize,
     isConfigured,
     isSignedIn,
+    isLoginDisabled,
     signIn,
     signOut,
     loadSheet,
