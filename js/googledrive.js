@@ -115,14 +115,8 @@ const GoogleDriveSync = (() => {
   }
 
   async function initialize() {
-    if (isLoginDisabled()) {
-      accessToken = null;
-      sessionStorage.removeItem("tradingjournal-google-token");
-      return { configured: isConfigured(), signedIn: false, loginDisabled: true };
-    }
-
     if (!isConfigured()) {
-      return { configured: false, signedIn: false, loginDisabled: false };
+      return { configured: false, signedIn: false, loginDisabled: isLoginDisabled() };
     }
 
     accessToken = sessionStorage.getItem("tradingjournal-google-token");
@@ -130,7 +124,7 @@ const GoogleDriveSync = (() => {
     return {
       configured: true,
       signedIn: Boolean(accessToken),
-      loginDisabled: false,
+      loginDisabled: isLoginDisabled(),
     };
   }
 
@@ -139,7 +133,6 @@ const GoogleDriveSync = (() => {
   }
 
   async function signIn() {
-    if (isLoginDisabled()) return false;
     if (signInPromise) return signInPromise;
 
     signInPromise = (async () => {
@@ -157,7 +150,6 @@ const GoogleDriveSync = (() => {
   }
 
   function signOut() {
-    if (isLoginDisabled()) return;
     if (accessToken && window.google?.accounts?.oauth2?.revoke) {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
@@ -525,14 +517,24 @@ const GoogleDriveSync = (() => {
     const isHome = container.dataset.authMode === "home";
 
     if (isLoginDisabled()) {
-      container.innerHTML = compact
-        ? `<div class="auth-compact"><span class="auth-user">Preview mode (login disabled)</span></div>`
-        : `
-            <div class="auth-panel connected">
-              <span class="auth-user">Preview mode enabled</span>
-              <span class="auth-cloud">Login is temporarily disabled in js/config.js</span>
-            </div>
-          `;
+      if (isHome) {
+        container.innerHTML = `
+          <div class="auth-panel connected">
+            <span class="auth-user">Preview mode enabled</span>
+            <span class="auth-cloud">Login is not required while the design is being finalized</span>
+          </div>
+        `;
+      } else {
+        // Keep Sync Now available in preview mode. If there is no active
+        // Google session yet, clicking it will ask for one on demand.
+        container.innerHTML = `
+          <div class="auth-compact">
+            <button class="button" type="button" data-auth-action="sync">Sync Now</button>
+            ${isSignedIn() ? `<button class="button" type="button" data-auth-action="signout">Sign Out</button>` : ""}
+          </div>
+        `;
+      }
+      attachAuthHandlers(container);
       return;
     }
 
@@ -587,6 +589,10 @@ const GoogleDriveSync = (() => {
           `;
     }
 
+    attachAuthHandlers(container);
+  }
+
+  function attachAuthHandlers(container) {
     container.querySelector('[data-auth-action="signin"]')?.addEventListener("click", async () => {
       try {
         await signIn();
@@ -601,18 +607,22 @@ const GoogleDriveSync = (() => {
       window.location.reload();
     });
 
-    container.querySelector('[data-auth-action="sync"]')?.addEventListener("click", () => {
+    container.querySelector('[data-auth-action="sync"]')?.addEventListener("click", async () => {
+      if (isConfigured() && !isSignedIn()) {
+        try {
+          await signIn();
+          window.location.reload();
+        } catch (error) {
+          alert(error.message || "Google sign in was cancelled.");
+        }
+        return;
+      }
       window.dispatchEvent(new CustomEvent("tradingjournal:sync"));
     });
   }
 
   function renderSignOutCorner(container) {
     if (!container) return;
-
-    if (isLoginDisabled()) {
-      container.innerHTML = "";
-      return;
-    }
 
     if (!isConfigured() || !isSignedIn()) {
       container.innerHTML = "";
