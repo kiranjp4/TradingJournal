@@ -71,6 +71,19 @@ function formatCellValue(value, columnRule = "auto") {
     }
   }
 
+  // A date picked on the website is stored as "yyyy-mm-dd" until the next
+  // sync converts it back to a Sheets serial number.
+  if (columnRule === "date" && /^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const parsed = new Date(`${text}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return {
+        display: parsed.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }),
+        className: "date",
+        raw: text,
+      };
+    }
+  }
+
   if (columnRule === "percent" && isNumeric) {
     const formatted = formatPercent(numeric * 100);
     return { display: `${formatted}%`, className: "number", raw: text };
@@ -109,6 +122,25 @@ function excelSerialToDate(serial) {
     month: "short",
     day: "numeric",
   });
+}
+
+// Converts a cell value (Sheets serial number, ISO string, or other date
+// text) into the "yyyy-mm-dd" format needed by <input type="date">.
+function toDateInputValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const numeric = Number(text);
+  if (!Number.isNaN(numeric) && numeric > 20000 && numeric < 80000) {
+    const utcDays = Math.floor(numeric - 25569);
+    const date = new Date(utcDays * 86400 * 1000);
+    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return "";
 }
 
 function formatPercent(value) {
@@ -178,6 +210,7 @@ function normalizeSheetData(sheetData) {
     bgColors: sheetData.bgColors || {},
     fgColors: sheetData.fgColors || {},
     percentCells: sheetData.percentCells || {},
+    dateCells: sheetData.dateCells || {},
     rowGroups: sheetData.rowGroups || [],
   };
 }
@@ -201,11 +234,41 @@ function toggleGroupCollapse(groupKey) {
   renderSheetPage(document.getElementById("sheet-root"));
 }
 
+function getLiveCacheKey(slug) {
+  return `${STORAGE_PREFIX}live:${slug}`;
+}
+
+function saveLiveCache(slug, sheetData) {
+  try {
+    localStorage.setItem(getLiveCacheKey(slug), JSON.stringify(sheetData));
+  } catch (error) {
+    // Browser storage may be full; live data still works without the cache.
+  }
+}
+
+function loadLiveCache(slug) {
+  const raw = localStorage.getItem(getLiveCacheKey(slug));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+
+// Loads directly from the Google Sheet and keeps a local copy so dropdowns,
+// calendars, colors, and row groups stay visible even without a session.
+async function loadLiveSheet(slug) {
+  const sheetData = await GoogleDriveSync.loadSheet(slug);
+  saveLiveCache(slug, sheetData);
+  return sheetData;
+}
+
 async function loadSheetData(slug) {
   if (window.GoogleDriveSync?.isSignedIn()) {
     try {
       pageState.storageMode = "googlesheets";
-      return normalizeSheetData(await GoogleDriveSync.loadSheet(slug));
+      return normalizeSheetData(await loadLiveSheet(slug));
     } catch (error) {
       pageState.storageMode = "bundled";
       throw error;
@@ -218,6 +281,12 @@ async function loadSheetData(slug) {
     return normalizeSheetData(localData);
   }
 
+  const cachedLive = loadLiveCache(slug);
+  if (cachedLive) {
+    pageState.storageMode = "cached";
+    return normalizeSheetData(cachedLive);
+  }
+
   pageState.storageMode = "bundled";
   return normalizeSheetData(await fetchJson(`../data/${slug}.json`));
 }
@@ -225,6 +294,7 @@ async function loadSheetData(slug) {
 function getStorageLabel() {
   if (pageState.storageMode === "googlesheets") return "Synced with Google Sheet";
   if (pageState.storageMode === "browser") return "Saved in browser only";
+  if (pageState.storageMode === "cached") return "Showing last synced copy (click Sync Now for latest)";
   return "Loaded from Excel import";
 }
 
@@ -304,7 +374,7 @@ async function addRow() {
     }
     try {
       await GoogleDriveSync.insertRowAt(pageState.slug, sheetData.rowCount);
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
@@ -337,7 +407,7 @@ async function deleteRow(rowIndex) {
 
     try {
       await GoogleDriveSync.deleteRowAt(pageState.slug, rowIndex);
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
@@ -367,7 +437,7 @@ async function saveCurrentSheet() {
     if (window.GoogleDriveSync?.isSignedIn()) {
       await GoogleDriveSync.saveDirtyCells(pageState.slug, pageState.dirtyCells);
       pageState.dirtyCells.clear();
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.storageMode = "googlesheets";
       pageState.dirty = false;
@@ -482,6 +552,8 @@ function renderSheetPage(container) {
 
       if (editMode) {
         const dropdownOptions = sheetData.dropdownCells?.[cellKey];
+        const isDateCell =
+          sheetData.dateCells?.[cellKey] || getColumnRule(pageState.slug, col) === "date";
 
         if (dropdownOptions && dropdownOptions.length) {
           const select = document.createElement("select");
@@ -511,6 +583,15 @@ function renderSheetPage(container) {
             updateCell(rowIndex, col, event.target.value);
           });
           td.appendChild(select);
+        } else if (isDateCell) {
+          const input = document.createElement("input");
+          input.type = "date";
+          input.className = "cell-input cell-date";
+          input.value = toDateInputValue(rawValue);
+          input.addEventListener("change", (event) => {
+            updateCell(rowIndex, col, event.target.value);
+          });
+          td.appendChild(input);
         } else {
           const input = document.createElement("input");
           input.className = "cell-input";
@@ -521,7 +602,11 @@ function renderSheetPage(container) {
           td.appendChild(input);
         }
       } else {
-        const columnRule = sheetData.percentCells?.[cellKey] ? "percent" : getColumnRule(pageState.slug, col);
+        const columnRule = sheetData.percentCells?.[cellKey]
+          ? "percent"
+          : sheetData.dateCells?.[cellKey]
+            ? "date"
+            : getColumnRule(pageState.slug, col);
         const formatted = formatCellValue(rawValue, columnRule);
         td.className = formatted.className;
         if (sheetData.boldCells?.[cellKey]) {

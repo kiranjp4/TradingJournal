@@ -584,6 +584,11 @@ main,
   cursor: pointer;
 }
 
+.cell-date {
+  min-width: 140px;
+  cursor: pointer;
+}
+
 .data-table td.cell-bold {
   font-weight: 700;
 }

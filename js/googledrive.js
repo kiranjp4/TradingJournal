@@ -327,7 +327,7 @@ const GoogleDriveSync = (() => {
       if (!response.ok) {
         const errorText = await response.text();
         console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, errorText);
-        return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
+        return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {}, dates: {} };
       }
 
       const data = await response.json();
@@ -337,6 +337,7 @@ const GoogleDriveSync = (() => {
       const bg = {};
       const fg = {};
       const percent = {};
+      const dates = {};
       const rangeDropdownCells = [];
 
       rowData.forEach((row, rowIndex) => {
@@ -352,6 +353,10 @@ const GoogleDriveSync = (() => {
             percent[key] = true;
           }
 
+          if (format?.numberFormat?.type === "DATE" || format?.numberFormat?.type === "DATE_TIME") {
+            dates[key] = true;
+          }
+
           const bgColor = format?.backgroundColor;
           if (bgColor && !isNearWhite(bgColor)) {
             bg[key] = toRgba(bgColor);
@@ -361,6 +366,13 @@ const GoogleDriveSync = (() => {
 
           const condition = cell.dataValidation?.condition;
           if (!condition) return;
+
+          // Date validation rules ("DATE_IS_VALID", "DATE_BETWEEN", etc.)
+          // show a calendar picker in Google Sheets.
+          if (typeof condition.type === "string" && condition.type.startsWith("DATE_")) {
+            dates[key] = true;
+            return;
+          }
 
           if (condition.type === "ONE_OF_LIST" && condition.values?.length) {
             const options = condition.values
@@ -390,13 +402,13 @@ const GoogleDriveSync = (() => {
           Object.keys(dropdowns).length
         } dropdown cell(s), ${Object.keys(bg).length} colored cell(s), ${
           Object.keys(percent).length
-        } percent cell(s).`
+        } percent cell(s), ${Object.keys(dates).length} date cell(s).`
       );
 
-      return { bold, dropdowns, bg, fg, percent };
+      return { bold, dropdowns, bg, fg, percent, dates };
     } catch (error) {
       console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, error);
-      return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
+      return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {}, dates: {} };
     }
   }
 
@@ -425,6 +437,7 @@ const GoogleDriveSync = (() => {
       bgColors: formatting.bg,
       fgColors: formatting.fg,
       percentCells: formatting.percent,
+      dateCells: formatting.dates,
       rowGroups,
     };
   }
