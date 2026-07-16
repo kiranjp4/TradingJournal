@@ -584,6 +584,43 @@ main,
   cursor: pointer;
 }
 
+.cell-date {
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.charts-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chart-panel {
+  padding: 18px 20px;
+}
+
+.chart-title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.chart-canvas-wrap {
+  position: relative;
+  height: 340px;
+}
+
+@media (max-width: 700px) {
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-canvas-wrap {
+    height: 260px;
+  }
+}
+
 .data-table td.cell-bold {
   font-weight: 700;
 }

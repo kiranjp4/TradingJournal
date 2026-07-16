@@ -188,7 +188,7 @@ const GoogleDriveSync = (() => {
 
   async function loadSheetMetaCache() {
     const response = await authFetch(
-      `${SHEETS_API_BASE}/${getSpreadsheetId()}?fields=sheets(properties,rowGroups)`
+      `${SHEETS_API_BASE}/${getSpreadsheetId()}?fields=sheets(properties,rowGroups,charts)`
     );
     if (!response.ok) {
       const errorText = await response.text();
@@ -202,6 +202,7 @@ const GoogleDriveSync = (() => {
         sheetId: sheet.properties.sheetId,
         controlAfter: Boolean(sheet.properties.gridProperties?.rowGroupControlAfter),
         rowGroups: sheet.rowGroups || [],
+        charts: sheet.charts || [],
       });
     });
   }
@@ -327,7 +328,7 @@ const GoogleDriveSync = (() => {
       if (!response.ok) {
         const errorText = await response.text();
         console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, errorText);
-        return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
+        return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {}, dates: {} };
       }
 
       const data = await response.json();
@@ -337,6 +338,7 @@ const GoogleDriveSync = (() => {
       const bg = {};
       const fg = {};
       const percent = {};
+      const dates = {};
       const rangeDropdownCells = [];
 
       rowData.forEach((row, rowIndex) => {
@@ -352,6 +354,10 @@ const GoogleDriveSync = (() => {
             percent[key] = true;
           }
 
+          if (format?.numberFormat?.type === "DATE" || format?.numberFormat?.type === "DATE_TIME") {
+            dates[key] = true;
+          }
+
           const bgColor = format?.backgroundColor;
           if (bgColor && !isNearWhite(bgColor)) {
             bg[key] = toRgba(bgColor);
@@ -361,6 +367,13 @@ const GoogleDriveSync = (() => {
 
           const condition = cell.dataValidation?.condition;
           if (!condition) return;
+
+          // Date validation rules ("DATE_IS_VALID", "DATE_BETWEEN", etc.)
+          // show a calendar picker in Google Sheets.
+          if (typeof condition.type === "string" && condition.type.startsWith("DATE_")) {
+            dates[key] = true;
+            return;
+          }
 
           if (condition.type === "ONE_OF_LIST" && condition.values?.length) {
             const options = condition.values
@@ -390,14 +403,152 @@ const GoogleDriveSync = (() => {
           Object.keys(dropdowns).length
         } dropdown cell(s), ${Object.keys(bg).length} colored cell(s), ${
           Object.keys(percent).length
-        } percent cell(s).`
+        } percent cell(s), ${Object.keys(dates).length} date cell(s).`
       );
 
-      return { bold, dropdowns, bg, fg, percent };
+      return { bold, dropdowns, bg, fg, percent, dates };
     } catch (error) {
       console.warn(`[TradingJournal] Could not read formatting for "${tabName}":`, error);
-      return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {} };
+      return { bold: {}, dropdowns: {}, bg: {}, fg: {}, percent: {}, dates: {} };
     }
+  }
+
+  function sliceGridRange(values, range) {
+    const startRow = range.startRowIndex || 0;
+    const endRow = range.endRowIndex ?? values.length;
+    const startCol = range.startColumnIndex || 0;
+    const endCol = range.endColumnIndex;
+    const out = [];
+    for (let r = startRow; r < Math.min(endRow, values.length); r += 1) {
+      const row = values[r] || [];
+      out.push(endCol === undefined ? row.slice(startCol) : row.slice(startCol, endCol));
+    }
+    return out;
+  }
+
+  function a1FromGridRange(tabTitle, range) {
+    const startCol = columnLetter(range.startColumnIndex || 0);
+    const endColIndex = (range.endColumnIndex ?? (range.startColumnIndex || 0) + 1) - 1;
+    const startRow = (range.startRowIndex || 0) + 1;
+    const endRow = range.endRowIndex ?? startRow;
+    return `'${tabTitle}'!${startCol}${startRow}:${columnLetter(endColIndex)}${endRow}`;
+  }
+
+  // Reads the values behind one chart data range. Ranges on the current tab
+  // reuse the already-loaded values; ranges on other tabs are fetched.
+  async function readGridRangeValues(gridRange, currentSheetId, currentValues) {
+    if (gridRange.sheetId === undefined || gridRange.sheetId === currentSheetId) {
+      return sliceGridRange(currentValues, gridRange);
+    }
+
+    let otherTitle = null;
+    sheetIdCache.forEach((id, title) => {
+      if (id === gridRange.sheetId) otherTitle = title;
+    });
+    if (!otherTitle) return [];
+
+    try {
+      const a1 = a1FromGridRange(otherTitle, gridRange);
+      const url = `${SHEETS_API_BASE}/${getSpreadsheetId()}/values/${encodeURIComponent(
+        a1
+      )}?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`;
+      const response = await authFetch(url);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.values || [];
+    } catch (error) {
+      console.warn("[TradingJournal] Could not read a chart data range:", error);
+      return [];
+    }
+  }
+
+  function toChartNumber(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const numeric = Number(value);
+    return Number.isNaN(numeric) ? null : numeric;
+  }
+
+  // Converts the tab's embedded Google Sheets charts into simple
+  // { title, chartType, labels, series } objects the website can draw.
+  async function getChartConfigs(tabName, values) {
+    if (!sheetMetaCache.has(tabName)) {
+      try {
+        await loadSheetMetaCache();
+      } catch (error) {
+        console.warn(`[TradingJournal] Could not read charts for "${tabName}":`, error);
+        return [];
+      }
+    }
+
+    const meta = sheetMetaCache.get(tabName);
+    if (!meta?.charts?.length) return [];
+
+    const configs = [];
+    for (const chart of meta.charts) {
+      const spec = chart.spec || {};
+      try {
+        if (spec.basicChart) {
+          const basic = spec.basicChart;
+          const headerCount = basic.headerCount ?? 0;
+
+          let labels = [];
+          const domainSource = basic.domains?.[0]?.domain?.sourceRange?.sources?.[0];
+          if (domainSource) {
+            labels = (await readGridRangeValues(domainSource, meta.sheetId, values)).flat();
+          }
+
+          const series = [];
+          for (const entry of basic.series || []) {
+            const source = entry.series?.sourceRange?.sources?.[0];
+            if (!source) continue;
+            const flat = (await readGridRangeValues(source, meta.sheetId, values)).flat();
+            const headerValue = headerCount > 0 && flat.length ? String(flat[0] ?? "").trim() : "";
+            series.push({
+              label: headerValue || `Series ${series.length + 1}`,
+              data: (headerCount > 0 ? flat.slice(headerCount) : flat).map(toChartNumber),
+              type: entry.type || basic.chartType || "LINE",
+            });
+          }
+
+          if (!series.length) continue;
+          configs.push({
+            title: spec.title || "",
+            chartType: basic.chartType || "LINE",
+            labels: headerCount > 0 ? labels.slice(headerCount) : labels,
+            series,
+          });
+        } else if (spec.pieChart) {
+          const pie = spec.pieChart;
+          const domainSource = pie.domain?.sourceRange?.sources?.[0];
+          const seriesSource = pie.series?.sourceRange?.sources?.[0];
+          let labels = domainSource
+            ? (await readGridRangeValues(domainSource, meta.sheetId, values)).flat()
+            : [];
+          let data = seriesSource
+            ? (await readGridRangeValues(seriesSource, meta.sheetId, values)).flat()
+            : [];
+
+          // Drop a header row if the first data cell is not numeric.
+          if (data.length && toChartNumber(data[0]) === null) {
+            labels = labels.slice(1);
+            data = data.slice(1);
+          }
+
+          if (!data.length) continue;
+          configs.push({
+            title: spec.title || "",
+            chartType: pie.pieHole ? "DOUGHNUT" : "PIE",
+            labels: labels.map((label) => String(label ?? "")),
+            series: [{ label: spec.title || "Value", data: data.map(toChartNumber), type: "PIE" }],
+          });
+        }
+      } catch (error) {
+        console.warn(`[TradingJournal] Skipping a chart on "${tabName}" that could not be read:`, error);
+      }
+    }
+
+    console.info(`[TradingJournal] "${tabName}": prepared ${configs.length} chart(s) for the website.`);
+    return configs;
   }
 
   async function loadSheet(slug) {
@@ -408,6 +559,7 @@ const GoogleDriveSync = (() => {
       readSheetFormatting(tabName),
       getRowGroups(tabName),
     ]);
+    const charts = await getChartConfigs(tabName, values);
     const rowCount = values.length;
     const colCount = values.reduce((max, row) => Math.max(max, row.length), 0);
 
@@ -425,7 +577,9 @@ const GoogleDriveSync = (() => {
       bgColors: formatting.bg,
       fgColors: formatting.fg,
       percentCells: formatting.percent,
+      dateCells: formatting.dates,
       rowGroups,
+      charts,
     };
   }
 

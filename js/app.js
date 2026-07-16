@@ -74,6 +74,19 @@ function formatCellValue(value, columnRule = "auto") {
     }
   }
 
+  // A date picked on the website is stored as "yyyy-mm-dd" until the next
+  // sync converts it back to a Sheets serial number.
+  if (columnRule === "date" && /^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const parsed = new Date(`${text}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return {
+        display: parsed.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }),
+        className: "date",
+        raw: text,
+      };
+    }
+  }
+
   if (columnRule === "percent" && isNumeric) {
     const formatted = formatPercent(numeric * 100);
     return { display: `${formatted}%`, className: "number", raw: text };
@@ -233,7 +246,9 @@ function normalizeSheetData(sheetData) {
     bgColors: sheetData.bgColors || {},
     fgColors: sheetData.fgColors || {},
     percentCells: sheetData.percentCells || {},
+    dateCells: sheetData.dateCells || {},
     rowGroups: sheetData.rowGroups || [],
+    charts: sheetData.charts || [],
   };
 }
 
@@ -256,11 +271,41 @@ function toggleGroupCollapse(groupKey) {
   renderSheetPage(document.getElementById("sheet-root"));
 }
 
+function getLiveCacheKey(slug) {
+  return `${STORAGE_PREFIX}live:${slug}`;
+}
+
+function saveLiveCache(slug, sheetData) {
+  try {
+    localStorage.setItem(getLiveCacheKey(slug), JSON.stringify(sheetData));
+  } catch (error) {
+    // Browser storage may be full; live data still works without the cache.
+  }
+}
+
+function loadLiveCache(slug) {
+  const raw = localStorage.getItem(getLiveCacheKey(slug));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+
+// Loads directly from the Google Sheet and keeps a local copy so dropdowns,
+// calendars, colors, and row groups stay visible even without a session.
+async function loadLiveSheet(slug) {
+  const sheetData = await GoogleDriveSync.loadSheet(slug);
+  saveLiveCache(slug, sheetData);
+  return sheetData;
+}
+
 async function loadSheetData(slug) {
   if (window.GoogleDriveSync?.isSignedIn()) {
     try {
       pageState.storageMode = "googlesheets";
-      return normalizeSheetData(await GoogleDriveSync.loadSheet(slug));
+      return normalizeSheetData(await loadLiveSheet(slug));
     } catch (error) {
       pageState.storageMode = "bundled";
       throw error;
@@ -273,6 +318,12 @@ async function loadSheetData(slug) {
     return normalizeSheetData(localData);
   }
 
+  const cachedLive = loadLiveCache(slug);
+  if (cachedLive) {
+    pageState.storageMode = "cached";
+    return normalizeSheetData(cachedLive);
+  }
+
   pageState.storageMode = "bundled";
   return normalizeSheetData(await fetchJson(`../data/${slug}.json`));
 }
@@ -280,6 +331,7 @@ async function loadSheetData(slug) {
 function getStorageLabel() {
   if (pageState.storageMode === "googlesheets") return "Synced with Google Sheet";
   if (pageState.storageMode === "browser") return "Saved in browser only";
+  if (pageState.storageMode === "cached") return "Showing last synced copy (click Sync Now for latest)";
   return "Loaded from Excel import";
 }
 
@@ -359,7 +411,7 @@ async function addRow() {
     }
     try {
       await GoogleDriveSync.insertRowAt(pageState.slug, sheetData.rowCount);
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
@@ -392,7 +444,7 @@ async function deleteRow(rowIndex) {
 
     try {
       await GoogleDriveSync.deleteRowAt(pageState.slug, rowIndex);
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.dirtyCells.clear();
       pageState.dirty = false;
@@ -422,7 +474,7 @@ async function saveCurrentSheet() {
     if (window.GoogleDriveSync?.isSignedIn()) {
       await GoogleDriveSync.saveDirtyCells(pageState.slug, pageState.dirtyCells);
       pageState.dirtyCells.clear();
-      pageState.sheetData = await GoogleDriveSync.loadSheet(pageState.slug);
+      pageState.sheetData = await loadLiveSheet(pageState.slug);
       initGroupCollapseState(pageState.sheetData.rowGroups);
       pageState.storageMode = "googlesheets";
       pageState.dirty = false;
@@ -536,10 +588,11 @@ function renderSheetPage(container) {
       const cellKey = `${rowIndex}:${col}`;
 
       if (editMode) {
-        const columnRule = getColumnRule(pageState.slug, col);
         const dropdownOptions =
           sheetData.dropdownCells?.[cellKey] ||
           getFallbackDropdownOptions(pageState.slug, sheetData, rowIndex, col);
+        const isDateCell =
+          sheetData.dateCells?.[cellKey] || getColumnRule(pageState.slug, col) === "date";
 
         if (dropdownOptions && dropdownOptions.length) {
           const select = document.createElement("select");
@@ -569,10 +622,10 @@ function renderSheetPage(container) {
             updateCell(rowIndex, col, event.target.value);
           });
           td.appendChild(select);
-        } else if (columnRule === "date") {
+        } else if (isDateCell) {
           const input = document.createElement("input");
-          input.className = "cell-input";
           input.type = "date";
+          input.className = "cell-input cell-date";
           input.value = normalizeDateInputValue(rawValue);
           input.addEventListener("change", (event) => {
             const isoDate = event.target.value;
@@ -589,7 +642,11 @@ function renderSheetPage(container) {
           td.appendChild(input);
         }
       } else {
-        const columnRule = sheetData.percentCells?.[cellKey] ? "percent" : getColumnRule(pageState.slug, col);
+        const columnRule = sheetData.percentCells?.[cellKey]
+          ? "percent"
+          : sheetData.dateCells?.[cellKey]
+            ? "date"
+            : getColumnRule(pageState.slug, col);
         const formatted = formatCellValue(rawValue, columnRule);
         td.className = formatted.className;
         if (sheetData.boldCells?.[cellKey]) {
@@ -673,11 +730,13 @@ function renderSheetPage(container) {
     <div class="panel">
       <div class="table-wrap"></div>
     </div>
+    <div class="charts-section"></div>
   `;
 
   const tableWrap = container.querySelector(".table-wrap");
   tableWrap.appendChild(table);
   syncStickyScrollbar(tableWrap);
+  renderSheetCharts(container, sheetData.charts);
 
   container.querySelector(".search-input").addEventListener("input", (event) => {
     pageState.searchTerm = event.target.value;
@@ -792,6 +851,157 @@ async function initHomePage() {
       </div>
     `;
   }
+}
+
+const CHART_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#f59e0b",
+  "#7c3aed",
+  "#0891b2",
+  "#db2777",
+  "#65a30d",
+];
+
+let chartJsPromise = null;
+let chartInstances = [];
+
+function ensureChartJs() {
+  if (window.Chart) return Promise.resolve();
+  if (chartJsPromise) return chartJsPromise;
+  chartJsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => {
+      chartJsPromise = null;
+      reject(new Error("Could not load the chart library. Check your internet connection."));
+    };
+    document.head.appendChild(script);
+  });
+  return chartJsPromise;
+}
+
+function formatChartLabel(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric) && numeric > 20000 && numeric < 80000 && Number.isInteger(numeric)) {
+    const asDate = excelSerialToDate(numeric);
+    if (asDate) return asDate;
+  }
+  return String(value);
+}
+
+function withAlpha(hexColor, alpha) {
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function buildChartJsConfig(chart) {
+  const labels = (chart.labels || []).map(formatChartLabel);
+
+  if (chart.chartType === "PIE" || chart.chartType === "DOUGHNUT") {
+    return {
+      type: chart.chartType === "DOUGHNUT" ? "doughnut" : "pie",
+      data: {
+        labels,
+        datasets: [
+          {
+            data: chart.series[0]?.data || [],
+            backgroundColor: labels.map((_, i) => withAlpha(CHART_COLORS[i % CHART_COLORS.length], 0.85)),
+            borderColor: "#ffffff",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "right" } },
+      },
+    };
+  }
+
+  const manyPoints = (chart.labels || []).length > 60;
+  const datasets = (chart.series || []).map((series, index) => {
+    const color = CHART_COLORS[index % CHART_COLORS.length];
+    const seriesType = series.type || chart.chartType || "LINE";
+    const isLine = seriesType === "LINE" || seriesType === "AREA" || seriesType === "SCATTER";
+    return {
+      label: series.label,
+      data: series.data,
+      type: isLine ? "line" : "bar",
+      borderColor: color,
+      backgroundColor: isLine ? withAlpha(color, 0.18) : withAlpha(color, 0.8),
+      borderWidth: 2,
+      fill: seriesType === "AREA",
+      tension: 0.25,
+      pointRadius: manyPoints ? 0 : 2.5,
+      pointHoverRadius: 4,
+      showLine: seriesType !== "SCATTER",
+      spanGaps: true,
+    };
+  });
+
+  return {
+    type: chart.chartType === "COLUMN" || chart.chartType === "BAR" ? "bar" : "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: chart.chartType === "BAR" ? "y" : "x",
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: datasets.length > 1, position: "top" } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { grid: { color: "rgba(148, 163, 184, 0.2)" } },
+      },
+    },
+  };
+}
+
+async function renderSheetCharts(container, charts) {
+  const section = container.querySelector(".charts-section");
+  if (!section) return;
+
+  chartInstances.forEach((instance) => instance.destroy());
+  chartInstances = [];
+
+  if (!charts || !charts.length) {
+    section.innerHTML = "";
+    return;
+  }
+
+  try {
+    await ensureChartJs();
+  } catch (error) {
+    section.innerHTML = `<div class="panel chart-panel"><p>${error.message}</p></div>`;
+    return;
+  }
+
+  section.innerHTML = charts
+    .map(
+      (chart, index) => `
+        <div class="panel chart-panel">
+          <h2 class="chart-title">${chart.title || `Chart ${index + 1}`}</h2>
+          <div class="chart-canvas-wrap"><canvas id="sheet-chart-${index}"></canvas></div>
+        </div>
+      `
+    )
+    .join("");
+
+  charts.forEach((chart, index) => {
+    const canvas = document.getElementById(`sheet-chart-${index}`);
+    if (!canvas) return;
+    try {
+      chartInstances.push(new Chart(canvas, buildChartJsConfig(chart)));
+    } catch (error) {
+      console.warn("[TradingJournal] Could not draw a chart:", error);
+    }
+  });
 }
 
 function syncHeaderHeightVar() {
