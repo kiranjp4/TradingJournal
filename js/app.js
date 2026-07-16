@@ -248,6 +248,7 @@ function normalizeSheetData(sheetData) {
     percentCells: sheetData.percentCells || {},
     dateCells: sheetData.dateCells || {},
     rowGroups: sheetData.rowGroups || [],
+    charts: sheetData.charts || [],
   };
 }
 
@@ -729,11 +730,13 @@ function renderSheetPage(container) {
     <div class="panel">
       <div class="table-wrap"></div>
     </div>
+    <div class="charts-section"></div>
   `;
 
   const tableWrap = container.querySelector(".table-wrap");
   tableWrap.appendChild(table);
   syncStickyScrollbar(tableWrap);
+  renderSheetCharts(container, sheetData.charts);
 
   container.querySelector(".search-input").addEventListener("input", (event) => {
     pageState.searchTerm = event.target.value;
@@ -848,6 +851,157 @@ async function initHomePage() {
       </div>
     `;
   }
+}
+
+const CHART_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#f59e0b",
+  "#7c3aed",
+  "#0891b2",
+  "#db2777",
+  "#65a30d",
+];
+
+let chartJsPromise = null;
+let chartInstances = [];
+
+function ensureChartJs() {
+  if (window.Chart) return Promise.resolve();
+  if (chartJsPromise) return chartJsPromise;
+  chartJsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => {
+      chartJsPromise = null;
+      reject(new Error("Could not load the chart library. Check your internet connection."));
+    };
+    document.head.appendChild(script);
+  });
+  return chartJsPromise;
+}
+
+function formatChartLabel(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric) && numeric > 20000 && numeric < 80000 && Number.isInteger(numeric)) {
+    const asDate = excelSerialToDate(numeric);
+    if (asDate) return asDate;
+  }
+  return String(value);
+}
+
+function withAlpha(hexColor, alpha) {
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function buildChartJsConfig(chart) {
+  const labels = (chart.labels || []).map(formatChartLabel);
+
+  if (chart.chartType === "PIE" || chart.chartType === "DOUGHNUT") {
+    return {
+      type: chart.chartType === "DOUGHNUT" ? "doughnut" : "pie",
+      data: {
+        labels,
+        datasets: [
+          {
+            data: chart.series[0]?.data || [],
+            backgroundColor: labels.map((_, i) => withAlpha(CHART_COLORS[i % CHART_COLORS.length], 0.85)),
+            borderColor: "#ffffff",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "right" } },
+      },
+    };
+  }
+
+  const manyPoints = (chart.labels || []).length > 60;
+  const datasets = (chart.series || []).map((series, index) => {
+    const color = CHART_COLORS[index % CHART_COLORS.length];
+    const seriesType = series.type || chart.chartType || "LINE";
+    const isLine = seriesType === "LINE" || seriesType === "AREA" || seriesType === "SCATTER";
+    return {
+      label: series.label,
+      data: series.data,
+      type: isLine ? "line" : "bar",
+      borderColor: color,
+      backgroundColor: isLine ? withAlpha(color, 0.18) : withAlpha(color, 0.8),
+      borderWidth: 2,
+      fill: seriesType === "AREA",
+      tension: 0.25,
+      pointRadius: manyPoints ? 0 : 2.5,
+      pointHoverRadius: 4,
+      showLine: seriesType !== "SCATTER",
+      spanGaps: true,
+    };
+  });
+
+  return {
+    type: chart.chartType === "COLUMN" || chart.chartType === "BAR" ? "bar" : "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: chart.chartType === "BAR" ? "y" : "x",
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: datasets.length > 1, position: "top" } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { grid: { color: "rgba(148, 163, 184, 0.2)" } },
+      },
+    },
+  };
+}
+
+async function renderSheetCharts(container, charts) {
+  const section = container.querySelector(".charts-section");
+  if (!section) return;
+
+  chartInstances.forEach((instance) => instance.destroy());
+  chartInstances = [];
+
+  if (!charts || !charts.length) {
+    section.innerHTML = "";
+    return;
+  }
+
+  try {
+    await ensureChartJs();
+  } catch (error) {
+    section.innerHTML = `<div class="panel chart-panel"><p>${error.message}</p></div>`;
+    return;
+  }
+
+  section.innerHTML = charts
+    .map(
+      (chart, index) => `
+        <div class="panel chart-panel">
+          <h2 class="chart-title">${chart.title || `Chart ${index + 1}`}</h2>
+          <div class="chart-canvas-wrap"><canvas id="sheet-chart-${index}"></canvas></div>
+        </div>
+      `
+    )
+    .join("");
+
+  charts.forEach((chart, index) => {
+    const canvas = document.getElementById(`sheet-chart-${index}`);
+    if (!canvas) return;
+    try {
+      chartInstances.push(new Chart(canvas, buildChartJsConfig(chart)));
+    } catch (error) {
+      console.warn("[TradingJournal] Could not draw a chart:", error);
+    }
+  });
 }
 
 function syncHeaderHeightVar() {
