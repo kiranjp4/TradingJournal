@@ -900,6 +900,36 @@ function withAlpha(hexColor, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// Draws a horizontal (or vertical, for horizontal bar charts) baseline at the
+// zero value so positive and negative values are easy to tell apart. The line
+// is only drawn when the value axis actually crosses zero.
+const zeroBaselinePlugin = {
+  id: "zeroBaseline",
+  afterDatasetsDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    const horizontal = chart.options?.indexAxis === "y";
+    const valueScale = horizontal ? scales.x : scales.y;
+    if (!valueScale || !chartArea) return;
+    if (!(valueScale.min < 0 && valueScale.max > 0)) return;
+
+    const zeroPixel = valueScale.getPixelForValue(0);
+    ctx.save();
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(226, 232, 240, 0.95)";
+    ctx.setLineDash([6, 4]);
+    if (horizontal) {
+      ctx.moveTo(zeroPixel, chartArea.top);
+      ctx.lineTo(zeroPixel, chartArea.bottom);
+    } else {
+      ctx.moveTo(chartArea.left, zeroPixel);
+      ctx.lineTo(chartArea.right, zeroPixel);
+    }
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
 function buildChartJsConfig(chart) {
   const labels = (chart.labels || []).map(formatChartLabel);
 
@@ -949,6 +979,7 @@ function buildChartJsConfig(chart) {
   return {
     type: chart.chartType === "COLUMN" || chart.chartType === "BAR" ? "bar" : "line",
     data: { labels, datasets },
+    plugins: [zeroBaselinePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
