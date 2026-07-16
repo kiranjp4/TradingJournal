@@ -45,6 +45,9 @@ const SHEET_COLUMN_RULES = {
     3: "percent",
     7: "plain",
   },
+  "trade-journal": {
+    1: "date",
+  },
 };
 
 function getColumnRule(slug, colIndex) {
@@ -112,9 +115,7 @@ function formatCellValue(value, columnRule = "auto") {
 }
 
 function excelSerialToDate(serial) {
-  const utcDays = Math.floor(serial - 25569);
-  const utcValue = utcDays * 86400;
-  const date = new Date(utcValue * 1000);
+  const date = excelSerialToJsDate(serial);
   if (Number.isNaN(date.getTime())) return null;
 
   return date.toLocaleDateString("en-IN", {
@@ -124,23 +125,58 @@ function excelSerialToDate(serial) {
   });
 }
 
-// Converts a cell value (Sheets serial number, ISO string, or other date
-// text) into the "yyyy-mm-dd" format needed by <input type="date">.
-function toDateInputValue(value) {
-  if (value === null || value === undefined || value === "") return "";
-  const text = String(value).trim();
+function excelSerialToJsDate(serial) {
+  const utcDays = Math.floor(serial - 25569);
+  const utcValue = utcDays * 86400;
+  return new Date(utcValue * 1000);
+}
+
+function excelSerialToIsoDate(serial) {
+  const date = excelSerialToJsDate(serial);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function isoDateToExcelSerial(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const utcMs = Date.UTC(year, month - 1, day);
+  if (Number.isNaN(utcMs)) return "";
+  return String(Math.floor(utcMs / 86400000) + 25569);
+}
+
+function normalizeDateInputValue(rawValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") return "";
+  const text = String(rawValue).trim();
+  if (!text) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
 
   const numeric = Number(text);
-  if (!Number.isNaN(numeric) && numeric > 20000 && numeric < 80000) {
-    const utcDays = Math.floor(numeric - 25569);
-    const date = new Date(utcDays * 86400 * 1000);
-    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  if (!Number.isNaN(numeric)) {
+    return excelSerialToIsoDate(numeric);
   }
 
   const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return "";
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getFallbackDropdownOptions(slug, sheetData, rowIndex, colIndex) {
+  if (slug !== "trade-journal" || colIndex !== 2 || rowIndex < 28) {
+    return null;
+  }
+
+  const values = [];
+  const seen = new Set();
+  sheetData.cells.forEach((row, idx) => {
+    if (idx < 28) return;
+    const value = String(row[2] ?? "").trim();
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    values.push(value);
+  });
+
+  return values.length ? values : null;
 }
 
 function formatPercent(value) {
@@ -551,7 +587,9 @@ function renderSheetPage(container) {
       const cellKey = `${rowIndex}:${col}`;
 
       if (editMode) {
-        const dropdownOptions = sheetData.dropdownCells?.[cellKey];
+        const dropdownOptions =
+          sheetData.dropdownCells?.[cellKey] ||
+          getFallbackDropdownOptions(pageState.slug, sheetData, rowIndex, col);
         const isDateCell =
           sheetData.dateCells?.[cellKey] || getColumnRule(pageState.slug, col) === "date";
 
@@ -587,9 +625,10 @@ function renderSheetPage(container) {
           const input = document.createElement("input");
           input.type = "date";
           input.className = "cell-input cell-date";
-          input.value = toDateInputValue(rawValue);
+          input.value = normalizeDateInputValue(rawValue);
           input.addEventListener("change", (event) => {
-            updateCell(rowIndex, col, event.target.value);
+            const isoDate = event.target.value;
+            updateCell(rowIndex, col, isoDate ? isoDateToExcelSerial(isoDate) : "");
           });
           td.appendChild(input);
         } else {
